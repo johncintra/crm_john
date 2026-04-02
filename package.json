@@ -1,0 +1,16 @@
+{
+  "name": "crm-john",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "backend",
+    "extension"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace backend run start:dev",
+    "build:backend": "npm --workspace backend run build",
+    "seed:backend": "npm --workspace backend run seed",
+    "dev:extension": "npm --workspace extension run dev",
+    "build:extension": "npm --workspace extension run build"
+  }
+}

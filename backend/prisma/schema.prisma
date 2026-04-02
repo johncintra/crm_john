@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum LeadTemperature {
+  COLD
+  WARM
+  HOT
+}
+
+enum LeadEventType {
+  CHECKOUT_EVENT
+  PIPELINE
+  NOTE
+  TASK
+  SYSTEM
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELED
+}
+
+enum TemplateCategory {
+  PIX_PENDING
+  CREDIT_CARD_DECLINED
+  PURCHASE_APPROVED
+  GENERAL
+}
+
+enum OrderStatus {
+  OPEN
+  ABANDONED
+  PENDING
+  APPROVED
+  DECLINED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum CheckoutProvider {
+  KIWIFY
+  HOTMART
+  MANUAL
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  memberships  Membership[]
+  leadNotes     LeadNote[]
+  leadTasks     LeadTask[]   @relation("TaskAssignee")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Workspace {
+  id            String          @id @default(cuid())
+  name          String
+  checkoutToken String          @unique @default(cuid())
+  memberships   Membership[]
+  pipelines     Pipeline[]
+  leads         Lead[]
+  leadTags      LeadTag[]
+  orders        Order[]
+  templates     MessageTemplate[]
+  checkoutEvents CheckoutEvent[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+}
+
+model Membership {
+  id          String         @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        MembershipRole @default(OWNER)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model Pipeline {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  isDefault   Boolean         @default(false)
+  stages      PipelineStage[]
+  leads       Lead[]
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([workspaceId, isDefault])
+}
+
+model PipelineStage {
+  id            String     @id @default(cuid())
+  pipelineId    String
+  name          String
+  color         String?
+  position      Int
+  pipeline      Pipeline   @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  currentLeads  Lead[]     @relation("LeadCurrentStage")
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+}
+
+model Lead {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  pipelineId      String
+  currentStageId  String?
+  name            String
+  email           String?
+  phone           String?
+  normalizedPhone String?
+  source          String?
+  temperature     LeadTemperature?
+  cpf             String?
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipeline        Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  currentStage    PipelineStage?     @relation("LeadCurrentStage", fields: [currentStageId], references: [id], onDelete: SetNull)
+  tags            LeadTagOnLead[]
+  notes           LeadNote[]
+  tasks           LeadTask[]
+  timeline        LeadTimelineEvent[]
+  orders          Order[]
+  checkoutEvents  CheckoutEvent[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+  @@index([currentStageId])
+  @@index([normalizedPhone])
+}
+
+model LeadTag {
+  id          String          @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String?
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads       LeadTagOnLead[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+model LeadTagOnLead {
+  leadId     String
+  tagId      String
+  assignedAt DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag        LeadTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@index([tagId])
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId     String
+  authorId   String?
+  content    String
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([leadId, createdAt])
+}
+
+model LeadTask {
+  id             String     @id @default(cuid())
+  leadId         String
+  assignedUserId String?
+  title          String
+  description    String?
+  dueAt          DateTime?
+  status         TaskStatus @default(OPEN)
+  lead           Lead       @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedUser   User?      @relation("TaskAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([leadId, status])
+}
+
+model LeadTimelineEvent {
+  id          String        @id @default(cuid())
+  leadId      String
+  type        LeadEventType
+  title       String
+  description String?
+  metadata    Json?
+  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+
+  @@index([leadId, createdAt])
+}
+
+model Order {
+  id          String           @id @default(cuid())
+  workspaceId String
+  leadId      String
+  provider    CheckoutProvider
+  externalId  String?
+  productName String
+  amount      Int
+  currency    String           @default("BRL")
+  status      OrderStatus      @default(OPEN)
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  events      CheckoutEvent[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([workspaceId])
+  @@index([leadId, createdAt])
+  @@unique([workspaceId, provider, externalId])
+}
+
+model CheckoutEvent {
+  id          String           @id @default(cuid())
+  workspaceId String
+  leadId      String?
+  orderId     String?
+  provider    CheckoutProvider
+  eventType   String
+  externalId  String?
+  payload     Json?
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead        Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([leadId])
+  @@index([orderId])
+}
+
+model MessageTemplate {
+  id          String           @id @default(cuid())
+  workspaceId String
+  title       String
+  category    TemplateCategory @default(GENERAL)
+  content     String
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([workspaceId, category])
+}
