@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { MembershipRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { ensureWorkspaceDefaultCrmSetup } from '../crm/default-workspace-setup';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -45,6 +46,8 @@ export class AuthService {
           role: MembershipRole.OWNER
         }
       });
+
+      await ensureWorkspaceDefaultCrmSetup(tx, workspace.id);
 
       return user;
     });

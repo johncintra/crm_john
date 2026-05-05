@@ -9,6 +9,7 @@ import {
   TemplateCategory
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { ensureWorkspaceDefaultCrmSetup } from '../src/modules/crm/default-workspace-setup';
 
 const prisma = new PrismaClient();
 
@@ -64,52 +65,10 @@ async function main() {
     }
   });
 
-  const pipeline = await prisma.pipeline.upsert({
-    where: {
-      id: 'pipeline_default_seed'
-    },
-    update: {
-      name: 'Pipeline Comercial',
-      workspaceId: workspace.id,
-      isDefault: true
-    },
-    create: {
-      id: 'pipeline_default_seed',
-      name: 'Pipeline Comercial',
-      workspaceId: workspace.id,
-      isDefault: true
-    }
-  });
-
-  const stages = [
-    { id: 'stage_new_seed', name: 'Novo Lead', position: 1, color: '#64748b' },
-    { id: 'stage_checkout_seed', name: 'Checkout Iniciado', position: 2, color: '#38bdf8' },
-    { id: 'stage_pix_seed', name: 'Pix Pendente', position: 3, color: '#f59e0b' },
-    { id: 'stage_declined_seed', name: 'Cartão Recusado', position: 4, color: '#fb7185' },
-    { id: 'stage_service_seed', name: 'Em Atendimento', position: 5, color: '#c084fc' },
-    { id: 'stage_recovered_seed', name: 'Recuperado', position: 6, color: '#22c55e' },
-    { id: 'stage_approved_seed', name: 'Compra Aprovada', position: 7, color: '#3dd9b5' },
-    { id: 'stage_lost_seed', name: 'Perdido', position: 8, color: '#94a3b8' }
-  ];
-
-  for (const stage of stages) {
-    await prisma.pipelineStage.upsert({
-      where: { id: stage.id },
-      update: {
-        pipelineId: pipeline.id,
-        name: stage.name,
-        position: stage.position,
-        color: stage.color
-      },
-      create: {
-        id: stage.id,
-        pipelineId: pipeline.id,
-        name: stage.name,
-        position: stage.position,
-        color: stage.color
-      }
-    });
-  }
+  const { checkoutPipeline } = await ensureWorkspaceDefaultCrmSetup(prisma, workspace.id);
+  const approvedStageId =
+    checkoutPipeline.stages.find((stage) => stage.name === 'Compra Aprovada')?.id ??
+    checkoutPipeline.stages[0]?.id;
 
   const lead = await prisma.lead.upsert({
     where: {
@@ -117,8 +76,8 @@ async function main() {
     },
     update: {
       workspaceId: workspace.id,
-      pipelineId: pipeline.id,
-      currentStageId: 'stage_approved_seed',
+      pipelineId: checkoutPipeline.id,
+      currentStageId: approvedStageId,
       name: 'Mariana Costa',
       email: 'mariana.costa@email.com',
       phone: '+55 11 99876-5432',
@@ -129,8 +88,8 @@ async function main() {
     create: {
       id: 'lead_seed_mariana',
       workspaceId: workspace.id,
-      pipelineId: pipeline.id,
-      currentStageId: 'stage_approved_seed',
+      pipelineId: checkoutPipeline.id,
+      currentStageId: approvedStageId,
       name: 'Mariana Costa',
       email: 'mariana.costa@email.com',
       phone: '+55 11 99876-5432',
@@ -141,9 +100,8 @@ async function main() {
   });
 
   const tags = [
-    { id: 'tag_seed_hot', name: 'Lead Quente', color: '#3dd9b5' },
-    { id: 'tag_seed_pix', name: 'Pix', color: '#38bdf8' },
-    { id: 'tag_seed_recovered', name: 'Recuperado', color: '#f59e0b' }
+    { id: 'tag_seed_kiwify', name: 'kiwify', color: '#3b82f6' },
+    { id: 'tag_seed_aprovado', name: 'aprovado', color: '#22c55e' }
   ];
 
   for (const tag of tags) {

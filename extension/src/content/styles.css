@@ -5,6 +5,7 @@
 :root {
   --crm-toolbar-height: 54px;
   --crm-right-rail-width: 348px;
+  --crm-right-rail-icons-width: 46px;
   --crm-stagebar-height: 64px;
 }
 
@@ -20,8 +21,12 @@
 }
 
 body.crm-john-with-rail #app {
-  padding-right: var(--crm-right-rail-width) !important;
+  padding-right: var(--crm-right-rail-icons-width) !important;
   box-sizing: border-box;
+}
+
+body.crm-john-with-rail.crm-john-rail-open #app {
+  padding-right: var(--crm-right-rail-width) !important;
 }
 
 body.crm-john-with-rail.crm-john-rail-hidden #app {
@@ -42,7 +47,7 @@ body.crm-john-with-stagebar #app {
   pointer-events: auto;
   position: fixed;
   top: calc(var(--crm-toolbar-height) + 12px);
-  right: 14px;
+  right: calc(var(--crm-right-rail-icons-width) + 14px);
   bottom: calc(var(--crm-stagebar-height) + 12px);
   width: calc(var(--crm-right-rail-width) - 28px);
   height: auto;
@@ -82,9 +87,13 @@ body.crm-john-with-stagebar #app {
   pointer-events: auto;
   position: fixed;
   left: clamp(420px, 29vw, 500px);
-  right: calc(var(--crm-right-rail-width) + 14px);
+  right: calc(var(--crm-right-rail-icons-width) + 14px);
   bottom: 10px;
   z-index: 3;
+}
+
+body.crm-john-rail-open .crm-stagebar {
+  right: calc(var(--crm-right-rail-width) + 14px);
 }
 
 .crm-stagebar-inner {
@@ -164,9 +173,9 @@ body.crm-john-with-stagebar #app {
   pointer-events: auto;
   position: fixed;
   top: var(--crm-toolbar-height);
-  right: 0;
+  right: var(--crm-right-rail-icons-width);
   bottom: 0;
-  width: var(--crm-right-rail-width);
+  width: calc(var(--crm-right-rail-width) - var(--crm-right-rail-icons-width));
   background: linear-gradient(180deg, #083747, #052d39 38%, #032733 100%);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
@@ -193,11 +202,13 @@ body.crm-john-with-stagebar #app {
 }
 
 .crm-right-rail-icons {
+  pointer-events: auto;
   position: absolute;
-  top: 0;
+  position: fixed;
+  top: var(--crm-toolbar-height);
   right: 0;
   bottom: 0;
-  width: 46px;
+  width: var(--crm-right-rail-icons-width);
   background: rgba(4, 34, 43, 0.9);
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
@@ -657,6 +668,43 @@ body.crm-john-with-stagebar #app {
   margin: 3px 0 0;
   color: #cbd5e1;
   font-size: 12px;
+}
+
+.crm-funnel-card-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crm-funnel-card-meta p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.crm-funnel-card-meta strong {
+  color: #f8fafc;
+}
+
+.crm-funnel-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.crm-funnel-card-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .crm-funnel-card-btn {

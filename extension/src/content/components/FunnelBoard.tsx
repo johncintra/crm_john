@@ -14,6 +14,17 @@ export interface FunnelCard {
   phone: string | null;
   avatarUrl: string | null;
   columnId: string;
+  leadId?: string;
+  source?: string | null;
+  tags?: Array<{ id: string; name: string; color?: string | null }>;
+  latestOrder?: {
+    id: string;
+    productName: string;
+    amount: number;
+    currency: string;
+    status: string;
+    provider: string;
+  } | null;
 }
 
 interface FunnelBoardProps {
@@ -35,6 +46,9 @@ interface FunnelBoardProps {
   onDeleteColumn: (columnId: string) => void;
   onReorderColumns: (columnId: string, targetColumnId: string) => void;
   onClose: () => void;
+  showRecentConversations?: boolean;
+  allowColumnManagement?: boolean;
+  allowCreateStages?: boolean;
 }
 
 type ModalState =
@@ -42,6 +56,29 @@ type ModalState =
   | { type: 'edit'; column: FunnelColumn }
   | { type: 'delete'; column: FunnelColumn }
   | null;
+
+function FunnelAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [avatarUrl]);
+
+  if (avatarUrl && !imageFailed) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        className="crm-funnel-avatar-img"
+        draggable={false}
+        loading="lazy"
+        onError={() => setImageFailed(true)}
+      />
+    );
+  }
+
+  return <div className="crm-funnel-avatar">{name.slice(0, 2).toUpperCase()}</div>;
+}
 
 export function FunnelBoard({
   funnelName,
@@ -61,7 +98,10 @@ export function FunnelBoard({
   onUpdateColumn,
   onDeleteColumn,
   onReorderColumns,
-  onClose
+  onClose,
+  showRecentConversations = true,
+  allowColumnManagement = true,
+  allowCreateStages = true
 }: FunnelBoardProps) {
   const [search, setSearch] = useState('');
   const [draggedConversation, setDraggedConversation] = useState<WhatsAppConversationItem | null>(null);
@@ -211,6 +251,7 @@ export function FunnelBoard({
           </div>
 
           <div ref={columnsRef} className="crm-funnel-columns crm-scrollbar">
+            {showRecentConversations ? (
             <div className="crm-funnel-column crm-funnel-column-recent">
             <div className="crm-funnel-column-head">
               <div className="crm-funnel-column-title-wrap">
@@ -229,15 +270,7 @@ export function FunnelBoard({
                   onDragEnd={() => setDraggedConversation(null)}
                 >
                   <div className="crm-funnel-card-top">
-                    {conversation.avatarUrl ? (
-                      <img
-                        src={conversation.avatarUrl}
-                        alt={conversation.name}
-                        className="crm-funnel-avatar-img"
-                      />
-                    ) : (
-                      <div className="crm-funnel-avatar">{conversation.name.slice(0, 2).toUpperCase()}</div>
-                    )}
+                    <FunnelAvatar name={conversation.name} avatarUrl={conversation.avatarUrl} />
                     <div className="crm-min-w-0">
                       <h3 className="crm-funnel-card-name">{conversation.name}</h3>
                     </div>
@@ -263,6 +296,7 @@ export function FunnelBoard({
               ))}
             </div>
           </div>
+            ) : null}
 
           {columns.map((column) => {
             const columnCards = cards.filter((card) => card.columnId === column.id);
@@ -296,8 +330,12 @@ export function FunnelBoard({
                       type="button"
                       className="crm-funnel-drag-handle"
                       title="Arraste para reordenar"
-                      draggable
+                      draggable={allowColumnManagement}
                       onDragStart={(event) => {
+                        if (!allowColumnManagement) {
+                          event.preventDefault();
+                          return;
+                        }
                         event.stopPropagation();
                         setDraggedColumnId(column.id);
                       }}
@@ -310,12 +348,16 @@ export function FunnelBoard({
                   </div>
                   <div className="crm-funnel-column-tools">
                     <span className="crm-funnel-count">{columnCards.length}</span>
-                    <button type="button" className="crm-funnel-icon-btn" onClick={() => openEditModal(column)}>
-                      <Settings className="crm-h-4 crm-w-4" />
-                    </button>
-                    <button type="button" className="crm-funnel-icon-btn" onClick={() => openDeleteModal(column)}>
-                      <X className="crm-h-4 crm-w-4" />
-                    </button>
+                    {allowColumnManagement ? (
+                      <>
+                        <button type="button" className="crm-funnel-icon-btn" onClick={() => openEditModal(column)}>
+                          <Settings className="crm-h-4 crm-w-4" />
+                        </button>
+                        <button type="button" className="crm-funnel-icon-btn" onClick={() => openDeleteModal(column)}>
+                          <X className="crm-h-4 crm-w-4" />
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
@@ -330,22 +372,40 @@ export function FunnelBoard({
                         onDragEnd={() => setDraggedCardId(null)}
                       >
                         <div className="crm-funnel-card-top">
-                          {card.avatarUrl ? (
-                            <img src={card.avatarUrl} alt={card.name} className="crm-funnel-avatar-img" />
-                          ) : (
-                            <div className="crm-funnel-avatar">{card.name.slice(0, 2).toUpperCase()}</div>
-                          )}
+                          <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
                           <div className="crm-min-w-0 crm-funnel-card-main">
                             <h3 className="crm-funnel-card-name">{card.name}</h3>
+                            {card.latestOrder?.productName ? (
+                              <p className="crm-funnel-card-meta">{card.latestOrder.productName}</p>
+                            ) : null}
+                            {card.source ? <p className="crm-funnel-card-meta">{card.source}</p> : null}
+                            {card.tags?.length ? (
+                              <div className="crm-funnel-card-tags">
+                                {card.tags.map((tag) => (
+                                  <span
+                                    key={tag.id}
+                                    className="crm-funnel-card-tag"
+                                    style={{
+                                      borderColor: `${tag.color ?? '#334155'}55`,
+                                      color: tag.color ?? '#cbd5e1'
+                                    }}
+                                  >
+                                    {tag.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                          <button
-                            type="button"
-                            className="crm-funnel-card-remove"
-                            title="Remover contato"
-                            onClick={() => onRemoveCard(card.id)}
-                          >
-                            <X className="crm-h-4 crm-w-4" />
-                          </button>
+                          {allowColumnManagement ? (
+                            <button
+                              type="button"
+                              className="crm-funnel-card-remove"
+                              title="Remover contato"
+                              onClick={() => onRemoveCard(card.id)}
+                            >
+                              <X className="crm-h-4 crm-w-4" />
+                            </button>
+                          ) : null}
                         </div>
                         <button
                           type="button"
@@ -376,6 +436,7 @@ export function FunnelBoard({
             );
           })}
 
+            {allowCreateStages ? (
             <div className="crm-funnel-column crm-funnel-column-create">
               <div className="crm-funnel-column-head">
                 <strong>Criar Nova Etapa</strong>
@@ -387,6 +448,7 @@ export function FunnelBoard({
                 </button>
               </div>
             </div>
+            ) : null}
           </div>
 
           {maxScrollLeft > 0 ? (

@@ -561,3 +561,17 @@ export async function openConversationInWhatsApp(
 
   return false;
 }
+
+export function openConversationByPhoneNumber(phone: string): boolean {
+  const normalizedPhone = normalizeDetectedPhone(phone);
+  if (!normalizedPhone) {
+    return false;
+  }
+
+  const nextUrl = new URL(window.location.href);
+  nextUrl.pathname = '/send';
+  nextUrl.search = '';
+  nextUrl.searchParams.set('phone', normalizedPhone);
+  window.location.assign(nextUrl.toString());
+  return true;
+}

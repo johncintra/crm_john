@@ -6,12 +6,14 @@ import {
 } from '@nestjs/common';
 import {
   CheckoutProvider,
+  LeadTag,
   LeadEventType,
   LeadTemperature,
   OrderStatus,
   Prisma,
   TaskStatus
 } from '@prisma/client';
+import { ensureWorkspaceDefaultCrmSetup } from './default-workspace-setup';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -24,6 +26,17 @@ const EVENT_TYPE_MAP: Record<LeadEventType, string> = {
   TASK: 'task',
   SYSTEM: 'system'
 };
+
+const CHECKOUT_TAG_NAMES = [
+  'kiwify',
+  'hotmart',
+  'pix',
+  'boleto',
+  'aprovado',
+  'recusado',
+  'reembolso',
+  'chargeback'
+] as const;
 
 @Injectable()
 export class CrmService {
@@ -244,6 +257,7 @@ export class CrmService {
 
   async getDefaultPipeline(userId: string) {
     const workspaceId = await this.getWorkspaceId(userId);
+    await ensureWorkspaceDefaultCrmSetup(this.prisma, workspaceId);
     const pipeline = await this.prisma.pipeline.findFirst({
       where: {
         workspaceId,
@@ -272,6 +286,76 @@ export class CrmService {
     };
   }
 
+  async getCheckoutBoard(userId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const { checkoutPipeline } = await ensureWorkspaceDefaultCrmSetup(this.prisma, workspaceId);
+
+    const leads = await this.prisma.lead.findMany({
+      where: {
+        workspaceId,
+        pipelineId: checkoutPipeline.id
+      },
+      include: {
+        currentStage: true,
+        tags: {
+          include: {
+            tag: true
+          }
+        },
+        orders: {
+          orderBy: { createdAt: 'desc' },
+          take: 1
+        }
+      },
+      orderBy: [
+        { updatedAt: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    });
+
+    return {
+      funnel: {
+        id: checkoutPipeline.id,
+        name: checkoutPipeline.name
+      },
+      columns: checkoutPipeline.stages.map((stage) => ({
+        id: stage.id,
+        name: stage.name,
+        color: stage.color,
+        position: stage.position
+      })),
+      cards: leads.map((lead) => {
+        const latestOrder = lead.orders[0] ?? null;
+
+        return {
+          id: lead.id,
+          leadId: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          normalizedPhone: lead.normalizedPhone,
+          columnId: lead.currentStageId ?? checkoutPipeline.stages[0]?.id ?? null,
+          source: lead.source,
+          temperature: lead.temperature,
+          tags: lead.tags.map((item) => ({
+            id: item.tag.id,
+            name: item.tag.name,
+            color: item.tag.color
+          })),
+          latestOrder: latestOrder
+            ? {
+                id: latestOrder.id,
+                productName: latestOrder.productName,
+                amount: latestOrder.amount,
+                currency: latestOrder.currency,
+                status: latestOrder.status,
+                provider: latestOrder.provider
+              }
+            : null
+        };
+      })
+    };
+  }
+
   async listTemplates(userId: string) {
     const workspaceId = await this.getWorkspaceId(userId);
     const templates = await this.prisma.messageTemplate.findMany({
@@ -296,30 +380,17 @@ export class CrmService {
       throw new ForbiddenException('Invalid checkout token.');
     }
 
-    const pipeline = await this.prisma.pipeline.findFirst({
-      where: {
-        workspaceId: workspace.id,
-        isDefault: true
-      },
-      include: {
-        stages: {
-          orderBy: { position: 'asc' }
-        }
-      }
-    });
-
-    if (!pipeline) {
-      throw new BadRequestException('Workspace has no default pipeline.');
-    }
+    const { checkoutPipeline } = await ensureWorkspaceDefaultCrmSetup(this.prisma, workspace.id);
 
     const normalizedPhone = this.normalizePhone(dto.phone);
     if (!normalizedPhone) {
       throw new BadRequestException('A valid phone number is required.');
     }
 
-    const targetStage = this.pickStageForOrderStatus(pipeline.stages, dto.status);
+    const targetStage = this.pickStageForOrderStatus(checkoutPipeline.stages, dto.status);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const tagRegistry = await this.loadCheckoutTags(tx, workspace.id);
       const lead =
         (await tx.lead.findFirst({
           where: {
@@ -330,8 +401,8 @@ export class CrmService {
         (await tx.lead.create({
           data: {
             workspaceId: workspace.id,
-            pipelineId: pipeline.id,
-            currentStageId: targetStage?.id ?? pipeline.stages[0]?.id ?? null,
+            pipelineId: checkoutPipeline.id,
+            currentStageId: targetStage?.id ?? checkoutPipeline.stages[0]?.id ?? null,
             name: dto.name?.trim() || normalizedPhone,
             email: dto.email?.trim() || null,
             phone: dto.phone,
@@ -352,7 +423,7 @@ export class CrmService {
           source: dto.source?.trim() || lead.source,
           cpf: dto.cpf?.trim() || lead.cpf,
           temperature: dto.temperature ?? this.temperatureFromOrderStatus(dto.status),
-          pipelineId: targetStage ? pipeline.id : lead.pipelineId,
+          pipelineId: checkoutPipeline.id,
           currentStageId: targetStage?.id ?? lead.currentStageId
         }
       });
@@ -405,6 +476,8 @@ export class CrmService {
         }
       });
 
+      await this.syncCheckoutTags(tx, updatedLead.id, tagRegistry, provider, dto.status, dto.paymentMethod);
+
       await tx.leadTimelineEvent.create({
         data: {
           leadId: updatedLead.id,
@@ -418,7 +491,8 @@ export class CrmService {
             externalId: dto.externalId ?? null,
             amount: dto.amount,
             currency: dto.currency?.trim() || 'BRL',
-            eventType: dto.eventType
+            eventType: dto.eventType,
+            paymentMethod: dto.paymentMethod ?? null
           }
         }
       });
@@ -432,6 +506,57 @@ export class CrmService {
     return {
       ok: true,
       ...result
+    };
+  }
+
+  mapKiwifyWebhookPayload(payload: Record<string, unknown>): IngestCheckoutEventDto {
+    const phone =
+      this.extractString(payload, ['customer.mobile', 'customer.phone', 'customer.cellphone', 'buyer.phone']) ??
+      this.extractString(payload, ['Customer.mobile', 'Customer.phone']) ??
+      '';
+
+    return {
+      phone,
+      name:
+        this.extractString(payload, ['customer.full_name', 'customer.name', 'buyer.name']) ??
+        this.extractString(payload, ['Customer.full_name', 'Customer.name']) ??
+        undefined,
+      email:
+        this.extractString(payload, ['customer.email', 'buyer.email']) ??
+        this.extractString(payload, ['Customer.email']) ??
+        undefined,
+      cpf:
+        this.extractString(payload, ['customer.document', 'customer.cpf', 'buyer.document']) ??
+        this.extractString(payload, ['Customer.document']) ??
+        undefined,
+      source: 'Kiwify Checkout',
+      productName:
+        this.extractString(payload, ['product.name', 'offer.title', 'order.bump_name']) ??
+        this.extractString(payload, ['Product.name']) ??
+        'Produto Kiwify',
+      amount: this.extractAmount(
+        this.extractNumberLike(payload, [
+          'commissionable_total_price',
+          'order.total',
+          'order.amount',
+          'price'
+        ])
+      ),
+      currency: this.extractString(payload, ['currency', 'order.currency']) ?? 'BRL',
+      status: this.mapKiwifyStatus(
+        this.extractString(payload, ['order_status', 'status', 'order.status']) ?? 'OPEN'
+      ),
+      eventType:
+        this.extractString(payload, ['event', 'event_name', 'webhook_event_type']) ?? 'kiwify_event',
+      externalId:
+        this.extractString(payload, ['order_id', 'order.id', 'sale_id', 'id']) ?? undefined,
+      description:
+        this.extractString(payload, ['event_description']) ??
+        undefined,
+      paymentMethod:
+        this.extractString(payload, ['payment_method', 'order.payment_method']) ??
+        'UNKNOWN',
+      metadata: payload
     };
   }
 
@@ -519,6 +644,167 @@ export class CrmService {
 
     const digits = phone.replace(/\D/g, '');
     return digits.length >= 10 ? digits : null;
+  }
+
+  private async loadCheckoutTags(tx: Prisma.TransactionClient, workspaceId: string) {
+    const tags = await tx.leadTag.findMany({
+      where: {
+        workspaceId,
+        name: {
+          in: [...CHECKOUT_TAG_NAMES]
+        }
+      }
+    });
+
+    return new Map(tags.map((tag) => [tag.name, tag]));
+  }
+
+  private async syncCheckoutTags(
+    tx: Prisma.TransactionClient,
+    leadId: string,
+    tagRegistry: Map<string, LeadTag>,
+    provider: CheckoutProvider,
+    status: OrderStatus,
+    paymentMethod?: string | null
+  ) {
+    const desiredTagNames = new Set<string>();
+    desiredTagNames.add(provider === CheckoutProvider.KIWIFY ? 'kiwify' : 'hotmart');
+
+    const normalizedPaymentMethod = (paymentMethod ?? '').trim().toLowerCase();
+    if (normalizedPaymentMethod.includes('pix')) {
+      desiredTagNames.add('pix');
+    }
+    if (normalizedPaymentMethod.includes('boleto') || normalizedPaymentMethod.includes('bank_slip')) {
+      desiredTagNames.add('boleto');
+    }
+
+    switch (status) {
+      case OrderStatus.APPROVED:
+        desiredTagNames.add('aprovado');
+        break;
+      case OrderStatus.DECLINED:
+        desiredTagNames.add('recusado');
+        break;
+      case OrderStatus.REFUNDED:
+        desiredTagNames.add('reembolso');
+        break;
+      case OrderStatus.CHARGEBACK:
+        desiredTagNames.add('chargeback');
+        break;
+      default:
+        break;
+    }
+
+    const relevantTagIds = [...tagRegistry.values()].map((tag) => tag.id);
+    await tx.leadTagOnLead.deleteMany({
+      where: {
+        leadId,
+        tagId: {
+          in: relevantTagIds
+        }
+      }
+    });
+
+    const tagLinks = [...desiredTagNames]
+      .map((name) => tagRegistry.get(name))
+      .filter((tag): tag is LeadTag => Boolean(tag))
+      .map((tag) => ({
+        leadId,
+        tagId: tag.id
+      }));
+
+    if (tagLinks.length) {
+      await tx.leadTagOnLead.createMany({
+        data: tagLinks,
+        skipDuplicates: true
+      });
+    }
+  }
+
+  private extractString(payload: Record<string, unknown>, paths: string[]) {
+    for (const path of paths) {
+      const value = this.readPath(payload, path);
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+
+    return null;
+  }
+
+  private extractNumberLike(payload: Record<string, unknown>, paths: string[]) {
+    for (const path of paths) {
+      const value = this.readPath(payload, path);
+      if (typeof value === 'number' || typeof value === 'string') {
+        return value;
+      }
+    }
+
+    return null;
+  }
+
+  private readPath(payload: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce<unknown>((current, key) => {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) {
+        return null;
+      }
+
+      return (current as Record<string, unknown>)[key] ?? null;
+    }, payload);
+  }
+
+  private extractAmount(rawValue: string | number | null) {
+    if (typeof rawValue === 'number') {
+      return rawValue > 1000 ? Math.round(rawValue) : Math.round(rawValue * 100);
+    }
+
+    if (typeof rawValue !== 'string') {
+      return 0;
+    }
+
+    const normalized = rawValue.replace(/[^\d.,-]/g, '').trim();
+    if (!normalized) {
+      return 0;
+    }
+
+    if (normalized.includes(',') || normalized.includes('.')) {
+      const decimal = normalized.replace(/\./g, '').replace(',', '.');
+      const parsed = Number(decimal);
+      return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+    }
+
+    const digits = Number(normalized);
+    return Number.isFinite(digits) ? digits : 0;
+  }
+
+  private mapKiwifyStatus(status: string): OrderStatus {
+    const normalized = status.trim().toLowerCase();
+
+    if (['paid', 'approved', 'completed', 'order_approved'].includes(normalized)) {
+      return OrderStatus.APPROVED;
+    }
+
+    if (['refunded', 'refund', 'refused_refund'].includes(normalized)) {
+      return OrderStatus.REFUNDED;
+    }
+
+    if (['chargedback', 'chargeback'].includes(normalized)) {
+      return OrderStatus.CHARGEBACK;
+    }
+
+    if (['waiting_payment', 'pending', 'billet_printed', 'pix_generated'].includes(normalized)) {
+      return OrderStatus.PENDING;
+    }
+
+    if (['refused', 'declined', 'rejected', 'failed'].includes(normalized)) {
+      return OrderStatus.DECLINED;
+    }
+
+    if (['abandoned', 'canceled', 'cancelled', 'expired'].includes(normalized)) {
+      return OrderStatus.ABANDONED;
+    }
+
+    return OrderStatus.OPEN;
   }
 
   private pickStageForOrderStatus(

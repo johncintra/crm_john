@@ -73,6 +73,11 @@ export class IngestCheckoutEventDto {
   description?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  paymentMethod?: string;
+
+  @IsOptional()
   @IsObject()
   metadata?: Record<string, unknown>;
 }

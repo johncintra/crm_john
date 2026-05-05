@@ -64,6 +64,35 @@ export interface LeadTag {
   color?: string | null;
 }
 
+export interface CheckoutBoardCard {
+  id: string;
+  leadId: string;
+  name: string;
+  phone?: string | null;
+  normalizedPhone?: string | null;
+  columnId?: string | null;
+  source?: string | null;
+  temperature?: string | null;
+  tags: LeadTag[];
+  latestOrder?: {
+    id: string;
+    productName: string;
+    amount: number;
+    currency: string;
+    status: OrderStatus;
+    provider: Provider;
+  } | null;
+}
+
+export interface CheckoutBoardData {
+  funnel: {
+    id: string;
+    name: string;
+  };
+  columns: PipelineStage[];
+  cards: CheckoutBoardCard[];
+}
+
 export interface TimelineItem {
   id: string;
   type: TimelineItemType;
@@ -141,6 +170,7 @@ export type BackgroundRequest =
   | { type: 'auth:logout' }
   | { type: 'auth:update-base-url'; payload: { apiBaseUrl: string } }
   | { type: 'lead:fetch-context'; payload: { phone: string } }
+  | { type: 'checkout:fetch-board' }
   | { type: 'lead:add-note'; payload: { leadId: string; content: string } }
   | { type: 'lead:create-task'; payload: { leadId: string; title: string; description?: string } }
   | { type: 'task:update-status'; payload: { taskId: string; status: TaskStatus } }

@@ -13,6 +13,7 @@ import {
 } from './local-preview';
 import type {
   AuthSession,
+  CheckoutBoardData,
   LeadContext,
   LoginPayload,
   TaskStatus
@@ -152,6 +153,28 @@ export async function fetchLeadContext(phone: string): Promise<LeadContext | nul
     pipeline,
     templates
   });
+}
+
+export async function fetchCheckoutBoard(): Promise<CheckoutBoardData> {
+  const session = await getStoredSession();
+  if (!session.token || isPreviewSession(session)) {
+    return {
+      funnel: {
+        id: 'checkout-preview',
+        name: 'Checkout'
+      },
+      columns: [
+        { id: 'preview-open', name: 'Checkout Iniciado', color: '#38bdf8', position: 1 },
+        { id: 'preview-pending', name: 'Pix Pendente', color: '#f59e0b', position: 2 },
+        { id: 'preview-declined', name: 'Cartão Recusado', color: '#ef4444', position: 3 },
+        { id: 'preview-approved', name: 'Compra Aprovada', color: '#22c55e', position: 4 },
+        { id: 'preview-lost', name: 'Perdido', color: '#94a3b8', position: 5 }
+      ],
+      cards: []
+    };
+  }
+
+  return request<CheckoutBoardData>('/pipelines/checkout/board');
 }
 
 export async function addLeadNote(leadId: string, content: string): Promise<void> {

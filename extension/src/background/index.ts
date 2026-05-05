@@ -1,6 +1,7 @@
 import {
   addLeadNote,
   createLeadTask,
+  fetchCheckoutBoard,
   fetchLeadContext,
   getProfile,
   login,
@@ -41,6 +42,11 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         }
         case 'lead:fetch-context': {
           const data = await fetchLeadContext(message.payload.phone);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'checkout:fetch-board': {
+          const data = await fetchCheckoutBoard();
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
           return;
         }

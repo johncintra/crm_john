@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -89,6 +90,12 @@ export class CrmController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('pipelines/checkout/board')
+  getCheckoutBoard(@CurrentUser() user: AuthUser) {
+    return this.crmService.getCheckoutBoard(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('templates')
   listTemplates(@CurrentUser() user: AuthUser) {
     return this.crmService.listTemplates(user.sub);
@@ -111,5 +118,15 @@ export class CrmController {
     @Body() dto: IngestCheckoutEventDto
   ) {
     return this.crmService.ingestCheckoutEvent(provider, token, dto);
+  }
+
+  @Post('webhooks/kiwify/:token')
+  ingestKiwifyEvent(@Param('token') token: string, @Body() payload: Record<string, unknown>) {
+    const dto = this.crmService.mapKiwifyWebhookPayload(payload);
+    if (!dto.phone) {
+      throw new BadRequestException('Phone is required in Kiwify payload.');
+    }
+
+    return this.crmService.ingestCheckoutEvent(CheckoutProvider.KIWIFY, token, dto);
   }
 }
