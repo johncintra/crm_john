@@ -3,6 +3,7 @@ import {
   createLeadTask,
   fetchCheckoutBoard,
   fetchLeadContext,
+  fetchWorkspaceTemplates,
   getProfile,
   login,
   updateApiBaseUrl,
@@ -47,6 +48,11 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         }
         case 'checkout:fetch-board': {
           const data = await fetchCheckoutBoard();
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'workspace:fetch-templates': {
+          const data = await fetchWorkspaceTemplates();
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
           return;
         }

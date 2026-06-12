@@ -4,6 +4,12 @@ import { MembershipRole } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { ensureWorkspaceDefaultCrmSetup } from '../crm/default-workspace-setup';
+import {
+  INTERNAL_CHECKOUT_TOKEN,
+  INTERNAL_USER_EMAIL,
+  INTERNAL_USER_NAME,
+  INTERNAL_WORKSPACE_NAME
+} from '../crm/internal-crm.constants';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -88,6 +94,83 @@ export class AuthService {
         }
       }))
     };
+  }
+
+  async getInternalSession() {
+    const userId = await this.prisma.$transaction(async (tx) => {
+      let workspace =
+        (await tx.workspace.findUnique({
+          where: { checkoutToken: INTERNAL_CHECKOUT_TOKEN }
+        })) ??
+        (await tx.workspace.findFirst({
+          where: { name: INTERNAL_WORKSPACE_NAME }
+        }));
+
+      if (!workspace) {
+        workspace = await tx.workspace.create({
+          data: {
+            name: INTERNAL_WORKSPACE_NAME,
+            checkoutToken: INTERNAL_CHECKOUT_TOKEN
+          }
+        });
+      } else if (
+        workspace.name !== INTERNAL_WORKSPACE_NAME ||
+        workspace.checkoutToken !== INTERNAL_CHECKOUT_TOKEN
+      ) {
+        workspace = await tx.workspace.update({
+          where: { id: workspace.id },
+          data: {
+            name: INTERNAL_WORKSPACE_NAME,
+            checkoutToken: INTERNAL_CHECKOUT_TOKEN
+          }
+        });
+      }
+
+      let user = await tx.user.findUnique({
+        where: { email: INTERNAL_USER_EMAIL }
+      });
+
+      if (!user) {
+        const passwordHash = await bcrypt.hash(`interno-${Date.now()}`, 10);
+        user = await tx.user.create({
+          data: {
+            name: INTERNAL_USER_NAME,
+            email: INTERNAL_USER_EMAIL,
+            passwordHash
+          }
+        });
+      } else if (user.name !== INTERNAL_USER_NAME) {
+        user = await tx.user.update({
+          where: { id: user.id },
+          data: { name: INTERNAL_USER_NAME }
+        });
+      }
+
+      const membership = await tx.membership.findUnique({
+        where: {
+          userId_workspaceId: {
+            userId: user.id,
+            workspaceId: workspace.id
+          }
+        }
+      });
+
+      if (!membership) {
+        await tx.membership.create({
+          data: {
+            userId: user.id,
+            workspaceId: workspace.id,
+            role: MembershipRole.OWNER
+          }
+        });
+      }
+
+      await ensureWorkspaceDefaultCrmSetup(tx, workspace.id);
+
+      return user.id;
+    });
+
+    return this.buildAuthResponse(userId);
   }
 
   private async buildAuthResponse(userId: string) {

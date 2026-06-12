@@ -4,13 +4,17 @@ import { demoLeadContext } from './demo-data';
 import { useBackground } from './hooks/useBackground';
 import { useWhatsAppConversation } from './hooks/useWhatsAppConversation';
 import { useWhatsAppConversationList } from './hooks/useWhatsAppConversationList';
+import { copyToClipboard, normalizePhone } from '../shared/utils';
 import {
+  getAllWhatsAppConversationList,
+  forceOpenConversationByPhoneNumber,
   getCurrentConversationAvatar,
   getSelectedConversationFromList,
+  insertTextIntoWhatsAppComposer,
   openConversationByPhoneNumber,
   openConversationInWhatsApp
 } from './whatsapp';
-import type { AuthSession, CheckoutBoardData, LeadContext } from '../shared/types';
+import type { AuthSession, CheckoutBoardData, LeadContext, MessageTemplate } from '../shared/types';
 import {
   FunnelBoard,
   type FunnelCard,
@@ -32,6 +36,16 @@ const SELECTED_FUNNEL_STORAGE_KEY = 'crm-john-selected-funnel-id';
 const LEGACY_BOARD_COLUMNS_STORAGE_KEY = 'crm-john-funnel-columns';
 const LEGACY_BOARD_CARDS_STORAGE_KEY = 'crm-john-funnel-cards';
 const CHECKOUT_FUNNEL_ID = '__checkout_funnel__';
+const CHECKOUT_FALLBACK_COLUMNS: FunnelColumn[] = [
+  { id: 'checkout-fallback-boleto', name: 'Boleto Gerado', color: '#a78bfa' },
+  { id: 'checkout-fallback-pix', name: 'Pix Gerado', color: '#06b6d4' },
+  { id: 'checkout-fallback-abandoned', name: 'Carrinho Abandonado', color: '#94a3b8' },
+  { id: 'checkout-fallback-declined', name: 'Compra Recusada', color: '#ef4444' },
+  { id: 'checkout-fallback-refunded', name: 'Reembolso', color: '#f59e0b' },
+  { id: 'checkout-fallback-chargeback', name: 'Chargeback', color: '#7c3aed' },
+  { id: 'checkout-fallback-awaiting', name: 'Aguardando Compra', color: '#facc15' },
+  { id: 'checkout-fallback-approved', name: 'Compra Aprovada', color: '#22c55e' }
+];
 
 function createDefaultFunnel(columns: FunnelColumn[] = [], cards: FunnelCard[] = []): SavedFunnel {
   return {
@@ -54,6 +68,7 @@ export function SidebarApp() {
   const [funnels, setFunnels] = useState<SavedFunnel[]>([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>('');
   const [checkoutBoard, setCheckoutBoard] = useState<CheckoutBoardData | null>(null);
+  const [workspaceTemplates, setWorkspaceTemplates] = useState<MessageTemplate[]>([]);
   const isCheckoutFunnelSelected = selectedFunnelId === CHECKOUT_FUNNEL_ID;
   const conversations = useWhatsAppConversationList({
     scanAll: workspaceView === 'general' && !isCheckoutFunnelSelected
@@ -64,7 +79,9 @@ export function SidebarApp() {
   }, [funnels, selectedFunnelId]);
 
   const checkoutColumns = useMemo<FunnelColumn[]>(() => {
-    return (checkoutBoard?.columns ?? []).map((column) => ({
+    const columns = checkoutBoard?.columns?.length ? checkoutBoard.columns : CHECKOUT_FALLBACK_COLUMNS;
+
+    return columns.map((column) => ({
       id: column.id,
       name: column.name,
       color: column.color ?? '#38bdf8'
@@ -78,11 +95,16 @@ export function SidebarApp() {
       id: card.id,
       leadId: card.leadId,
       name: card.name,
+      email: card.email ?? null,
       phone: card.phone ?? card.normalizedPhone ?? null,
       avatarUrl: null,
       columnId: card.columnId ?? fallbackColumnId,
       source: card.source,
-      tags: card.tags,
+      temperature: card.temperature ?? null,
+      tags: (card.tags ?? []).filter((tag) => {
+        const normalizedName = tag.name.trim().toLowerCase();
+        return normalizedName !== 'kiwify' && normalizedName !== 'hotmart';
+      }),
       latestOrder: card.latestOrder
     }));
   }, [checkoutBoard?.cards, checkoutColumns]);
@@ -96,6 +118,8 @@ export function SidebarApp() {
       }
     ];
   }, [checkoutBoard?.funnel.name, funnels]);
+
+  const assignableFunnels = useMemo(() => funnels.map((funnel) => ({ id: funnel.id, name: funnel.name })), [funnels]);
 
   const boardColumns = isCheckoutFunnelSelected
     ? checkoutColumns
@@ -190,6 +214,17 @@ export function SidebarApp() {
     }
   }, [sendMessage]);
 
+  const loadWorkspaceTemplates = useCallback(async () => {
+    try {
+      const data = await sendMessage<MessageTemplate[]>({ type: 'workspace:fetch-templates' });
+      if (Array.isArray(data) && data.length) {
+        setWorkspaceTemplates(data);
+      }
+    } catch {
+      // non-critical — templates will be missing but everything else works
+    }
+  }, [sendMessage]);
+
   const refreshLeadContext = useCallback(async () => {
     if (!conversation.phone) {
       setContext(demoLeadContext);
@@ -228,10 +263,26 @@ export function SidebarApp() {
   }, [loadCheckoutBoard, session?.token]);
 
   useEffect(() => {
+    void loadWorkspaceTemplates();
+  }, [loadWorkspaceTemplates, session?.token]);
+
+  useEffect(() => {
     if (selectedFunnelId === CHECKOUT_FUNNEL_ID) {
       void loadCheckoutBoard();
     }
   }, [loadCheckoutBoard, selectedFunnelId]);
+
+  useEffect(() => {
+    if (workspaceView !== 'general' || selectedFunnelId !== CHECKOUT_FUNNEL_ID) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void loadCheckoutBoard();
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [loadCheckoutBoard, selectedFunnelId, workspaceView]);
 
   useEffect(() => {
     void chrome.storage.local
@@ -293,6 +344,25 @@ export function SidebarApp() {
       setSelectedFunnelId(funnels[0].id);
     }
   }, [funnels, selectedFunnelId]);
+
+  useEffect(() => {
+    if (workspaceView !== 'funnel') {
+      return;
+    }
+
+    if (selectedFunnelId !== CHECKOUT_FUNNEL_ID) {
+      return;
+    }
+
+    if (selectedLocalFunnel) {
+      setSelectedFunnelId(selectedLocalFunnel.id);
+      return;
+    }
+
+    if (funnels[0]) {
+      setSelectedFunnelId(funnels[0].id);
+    }
+  }, [funnels, selectedFunnelId, selectedLocalFunnel, workspaceView]);
 
   useEffect(() => {
     if (
@@ -366,19 +436,93 @@ export function SidebarApp() {
     name: string;
     phone: string | null;
   }) => {
-    const opened = await openConversationInWhatsApp(phone ?? '', name);
+    const normalizedCardPhone = phone ? normalizePhone(phone) : null;
+    const normalizedCardName = name.trim().toLowerCase();
+    const matchedConversation =
+      (normalizedCardPhone
+        ? conversations.find((item) => item.phone && normalizePhone(item.phone) === normalizedCardPhone)
+        : null) ??
+      conversations.find((item) => item.name === name) ??
+      conversations.find((item) => item.name.trim().toLowerCase() === normalizedCardName) ??
+      conversations.find((item) => {
+        const normalizedConversationName = item.name.trim().toLowerCase();
+        return (
+          normalizedConversationName.includes(normalizedCardName) ||
+          normalizedCardName.includes(normalizedConversationName)
+        );
+      }) ??
+      null;
+
+    let conversationMatch = matchedConversation;
+    const resolvedPhone = phone ?? matchedConversation?.phone ?? null;
+
+    if (isCheckoutFunnelSelected && resolvedPhone && !conversationMatch) {
+      const allConversations = await getAllWhatsAppConversationList();
+      conversationMatch =
+        allConversations.find(
+          (item) => item.phone && normalizePhone(item.phone) === normalizePhone(resolvedPhone)
+        ) ??
+        allConversations.find((item) => item.name.trim().toLowerCase() === normalizedCardName) ??
+        null;
+    }
+
+    const finalPhone = resolvedPhone ?? conversationMatch?.phone ?? null;
+    const finalName = conversationMatch?.name ?? name;
+
+    const opened = await openConversationInWhatsApp(finalPhone ?? '', finalName);
     if (opened) {
       setWorkspaceView('funnel');
       return;
     }
 
-    if (phone && openConversationByPhoneNumber(phone)) {
+    if (finalPhone && (await openConversationByPhoneNumber(finalPhone))) {
       setWorkspaceView('funnel');
       setToast('Abrindo conversa por numero.');
       return;
     }
 
+    if (isCheckoutFunnelSelected && finalPhone && !conversationMatch) {
+      if (forceOpenConversationByPhoneNumber(finalPhone)) {
+        setWorkspaceView('funnel');
+        return;
+      }
+    }
+
     setToast('Nao consegui focar ou iniciar a conversa automaticamente.');
+  };
+
+  const handleSendTemplate = async (card: FunnelCard, columnName: string) => {
+    const n = columnName.trim().toLowerCase();
+    let category: MessageTemplate['category'] = 'GENERAL';
+    if (n.includes('pix') || n.includes('boleto')) category = 'PIX_PENDING';
+    else if (n.includes('recusad')) category = 'CREDIT_CARD_DECLINED';
+    else if (n.includes('aprovad')) category = 'PURCHASE_APPROVED';
+
+    const template =
+      workspaceTemplates.find((t) => t.category === category) ??
+      workspaceTemplates.find((t) => t.category === 'GENERAL') ??
+      workspaceTemplates[0] ??
+      null;
+
+    await handleOpenConversation(card);
+
+    if (!template) {
+      setToast('Nenhum template encontrado para essa etapa.');
+      return;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 700));
+    const inserted = insertTextIntoWhatsAppComposer(template.content);
+    setToast(inserted ? `Template "${template.title}" inserido.` : 'Conversa aberta.');
+  };
+
+  const handleCopyEmail = async (email: string) => {
+    try {
+      await copyToClipboard(email);
+      setToast('Email copiado.');
+    } catch {
+      setToast('Nao consegui copiar o email.');
+    }
   };
 
   const handleCreateColumn = ({ name, color }: { name: string; color: string }) => {
@@ -565,7 +709,7 @@ export function SidebarApp() {
     handleAssignConversation(
       {
         id: `current-${conversation.phone ?? conversation.label ?? Date.now()}`,
-        name: currentConversationListItem?.name ?? safeConversationLabel ?? conversation.phone ?? 'Conversa atual',
+        name: safeConversationLabel ?? conversation.phone ?? 'Conversa atual',
         phone: conversation.phone,
         avatarUrl: getCurrentConversationAvatar()
       },
@@ -697,6 +841,7 @@ export function SidebarApp() {
           onSelectFunnel={setSelectedFunnelId}
           onCreateFunnel={handleCreateFunnel}
           onConfigureFunnel={handleConfigureFunnel}
+          onCopyEmail={handleCopyEmail}
           onOpenConversation={handleOpenConversation}
           onAssignConversation={handleAssignConversation}
           onMoveCard={(cardId, columnId) => {
@@ -707,10 +852,22 @@ export function SidebarApp() {
           onUpdateColumn={handleUpdateColumn}
           onDeleteColumn={handleDeleteColumn}
           onReorderColumns={handleReorderColumns}
-          onClose={() => setWorkspaceView('funnel')}
+          onClose={() => {
+            if (isCheckoutFunnelSelected && selectedLocalFunnel) {
+              setSelectedFunnelId(selectedLocalFunnel.id);
+            }
+            setWorkspaceView('funnel');
+          }}
           showRecentConversations={!isCheckoutFunnelSelected}
           allowColumnManagement={!isCheckoutFunnelSelected}
           allowCreateStages={!isCheckoutFunnelSelected}
+          compactCheckoutCards={isCheckoutFunnelSelected}
+          templates={isCheckoutFunnelSelected ? workspaceTemplates : undefined}
+          onSendTemplate={
+            isCheckoutFunnelSelected
+              ? (card, columnName) => { void handleSendTemplate(card, columnName); }
+              : undefined
+          }
         />
       ) : null}
 
@@ -721,10 +878,10 @@ export function SidebarApp() {
               <span>Funil</span>
               <select
                 className="crm-stagebar-select"
-                value={selectedFunnelId}
+                value={selectedLocalFunnel?.id ?? funnels[0]?.id ?? ''}
                 onChange={(event) => setSelectedFunnelId(event.target.value)}
               >
-                {allFunnels.map((funnel) => (
+                {assignableFunnels.map((funnel) => (
                   <option key={funnel.id} value={funnel.id}>
                     {funnel.name}
                   </option>

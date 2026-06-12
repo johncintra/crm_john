@@ -20,6 +20,11 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('internal-session')
+  internalSession() {
+    return this.authService.getInternalSession();
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   me(@CurrentUser() user: AuthUser) {

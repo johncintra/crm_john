@@ -352,6 +352,54 @@ function getConversationRowElements(): HTMLElement[] {
   return uniqueRows;
 }
 
+function getFirstConversationRow(): HTMLElement | null {
+  return getConversationRowElements()[0] ?? null;
+}
+
+function getFirstSearchResultRow(): HTMLElement | null {
+  const paneSide = document.querySelector('#pane-side');
+  if (!(paneSide instanceof HTMLElement)) {
+    return null;
+  }
+
+  const candidates = Array.from(
+    paneSide.querySelectorAll(
+      [
+        '[role="listitem"]',
+        '[data-testid="cell-frame-container"]',
+        'div[tabindex="0"]',
+        'div[tabindex="-1"]'
+      ].join(', ')
+    )
+  );
+
+  for (const element of candidates) {
+    if (!(element instanceof HTMLElement)) {
+      continue;
+    }
+
+    const row =
+      element.closest('[role="listitem"]') ??
+      element.closest('[data-testid="cell-frame-container"]') ??
+      element;
+
+    if (!(row instanceof HTMLElement)) {
+      continue;
+    }
+
+    const hasSearchableText = Boolean(
+      row.textContent?.trim() || row.querySelector('[title], span[dir="auto"], div[dir="auto"]')
+    );
+    const hasButtonLikeShape = row.getBoundingClientRect().height > 40;
+
+    if (hasSearchableText && hasButtonLikeShape) {
+      return row;
+    }
+  }
+
+  return null;
+}
+
 function normalizeDetectedPhone(value: string | null): string | null {
   if (!value) {
     return null;
@@ -400,11 +448,38 @@ function clickConversationRow(row: HTMLElement): boolean {
     row.querySelector<HTMLElement>('[tabindex]') ??
     row;
 
+  row.scrollIntoView({ block: 'nearest' });
+  clickableTarget.focus();
+  clickableTarget.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
   clickableTarget.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+  clickableTarget.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
   clickableTarget.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
   clickableTarget.click();
 
   return true;
+}
+
+function navigateWithinWhatsApp(relativeUrl: string): void {
+  const appRoot =
+    document.querySelector('#app') ??
+    document.querySelector('[data-testid="app-wrapper-web"]') ??
+    document.body;
+
+  const anchor = document.createElement('a');
+  anchor.href = relativeUrl;
+  anchor.style.display = 'none';
+  appRoot.appendChild(anchor);
+
+  anchor.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      view: window
+    })
+  );
+
+  anchor.remove();
 }
 
 function findConversationRow(target: string, phone?: string | null): HTMLElement | null {
@@ -549,12 +624,45 @@ export async function openConversationInWhatsApp(
   clearEditableText(searchBox);
   insertEditableText(searchBox, target);
 
-  await new Promise((resolve) => window.setTimeout(resolve, 320));
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 220));
 
-  const searchedRow = findConversationRow(target, phone);
-  if (searchedRow) {
+    const searchedRow = findConversationRow(target, phone);
+    if (searchedRow) {
+      clearEditableText(searchBox);
+      return clickConversationRow(searchedRow);
+    }
+  }
+
+  searchBox.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true
+    })
+  );
+  searchBox.dispatchEvent(
+    new KeyboardEvent('keyup', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true
+    })
+  );
+
+  await new Promise((resolve) => window.setTimeout(resolve, 220));
+
+  const enteredRow = findConversationRow(target, phone);
+  if (enteredRow) {
     clearEditableText(searchBox);
-    return clickConversationRow(searchedRow);
+    return clickConversationRow(enteredRow);
+  }
+
+  if (target) {
+    const firstVisibleResult = getFirstSearchResultRow() ?? getFirstConversationRow();
+    if (firstVisibleResult) {
+      clearEditableText(searchBox);
+      return clickConversationRow(firstVisibleResult);
+    }
   }
 
   clearEditableText(searchBox);
@@ -562,7 +670,84 @@ export async function openConversationInWhatsApp(
   return false;
 }
 
-export function openConversationByPhoneNumber(phone: string): boolean {
+export async function openConversationFromSearchResult(query: string): Promise<boolean> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return false;
+  }
+
+  const searchBox = getChatListSearchBox();
+  if (!searchBox) {
+    return false;
+  }
+
+  clearEditableText(searchBox);
+  insertEditableText(searchBox, trimmedQuery);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 220));
+
+    const firstVisibleResult = getFirstSearchResultRow() ?? getFirstConversationRow();
+    if (firstVisibleResult) {
+      clearEditableText(searchBox);
+      return clickConversationRow(firstVisibleResult);
+    }
+  }
+
+  clearEditableText(searchBox);
+  return false;
+}
+
+export async function openConversationByPhoneNumber(phone: string): Promise<boolean> {
+  const normalizedPhone = normalizeDetectedPhone(phone);
+  if (!normalizedPhone) {
+    return false;
+  }
+
+  const previousConversation = getCurrentConversation();
+  const nextUrl = new URL(window.location.href);
+  nextUrl.pathname = '/send';
+  nextUrl.search = '';
+  nextUrl.searchParams.set('phone', normalizedPhone);
+  nextUrl.searchParams.set('type', 'phone_number');
+  nextUrl.searchParams.set('app_absent', '0');
+  const nextRelativeUrl = `${nextUrl.pathname}${nextUrl.search}`;
+  const currentRelativeUrl = `${window.location.pathname}${window.location.search}`;
+
+  navigateWithinWhatsApp(nextRelativeUrl);
+  await new Promise((resolve) => window.setTimeout(resolve, 120));
+
+  if (`${window.location.pathname}${window.location.search}` !== nextRelativeUrl) {
+    if (currentRelativeUrl === nextRelativeUrl) {
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+      window.dispatchEvent(new Event('locationchange'));
+      window.dispatchEvent(new Event('hashchange'));
+    } else {
+      window.history.pushState({}, '', nextRelativeUrl);
+      window.dispatchEvent(new Event('pushstate'));
+      window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+      window.dispatchEvent(new Event('locationchange'));
+      window.dispatchEvent(new Event('hashchange'));
+    }
+  }
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+
+    const nextConversation = getCurrentConversation();
+    const conversationChanged =
+      nextConversation.label !== previousConversation.label ||
+      nextConversation.phone !== previousConversation.phone;
+
+    if (conversationChanged && (nextConversation.phone === normalizedPhone || !!nextConversation.label)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function forceOpenConversationByPhoneNumber(phone: string): boolean {
   const normalizedPhone = normalizeDetectedPhone(phone);
   if (!normalizedPhone) {
     return false;
@@ -572,6 +757,8 @@ export function openConversationByPhoneNumber(phone: string): boolean {
   nextUrl.pathname = '/send';
   nextUrl.search = '';
   nextUrl.searchParams.set('phone', normalizedPhone);
-  window.location.assign(nextUrl.toString());
+  nextUrl.searchParams.set('type', 'phone_number');
+  nextUrl.searchParams.set('app_absent', '0');
+  window.location.assign(`${nextUrl.pathname}${nextUrl.search}`);
   return true;
 }

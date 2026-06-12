@@ -9,6 +9,8 @@ import {
 
 let cachedConversationItems: WhatsAppConversationItem[] = [];
 let hasScannedAllConversations = false;
+let hasRequestedAllConversationsScan = false;
+let allConversationsScanPromise: Promise<WhatsAppConversationItem[]> | null = null;
 
 interface UseWhatsAppConversationListOptions {
   scanAll?: boolean;
@@ -103,7 +105,12 @@ export function useWhatsAppConversationList(
     let cancelled = false;
 
     const scan = async () => {
-      const next = await getAllWhatsAppConversationList();
+      if (!allConversationsScanPromise) {
+        hasRequestedAllConversationsScan = true;
+        allConversationsScanPromise = getAllWhatsAppConversationList();
+      }
+
+      const next = await allConversationsScanPromise;
       if (cancelled) {
         return;
       }
@@ -116,6 +123,13 @@ export function useWhatsAppConversationList(
         return prevSerialized === nextSerialized ? previous : next;
       });
     };
+
+    if (hasRequestedAllConversationsScan && !hasScannedAllConversations && allConversationsScanPromise) {
+      void scan();
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const timeout = window.setTimeout(() => {
       void scan();

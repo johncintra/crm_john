@@ -68,6 +68,7 @@ export interface CheckoutBoardCard {
   id: string;
   leadId: string;
   name: string;
+  email?: string | null;
   phone?: string | null;
   normalizedPhone?: string | null;
   columnId?: string | null;
@@ -171,6 +172,7 @@ export type BackgroundRequest =
   | { type: 'auth:update-base-url'; payload: { apiBaseUrl: string } }
   | { type: 'lead:fetch-context'; payload: { phone: string } }
   | { type: 'checkout:fetch-board' }
+  | { type: 'workspace:fetch-templates' }
   | { type: 'lead:add-note'; payload: { leadId: string; content: string } }
   | { type: 'lead:create-task'; payload: { leadId: string; title: string; description?: string } }
   | { type: 'task:update-status'; payload: { taskId: string; status: TaskStatus } }

@@ -1,5 +1,7 @@
-import { MessageCircle, Plus, Settings, X } from 'lucide-react';
+import { Copy, MessageCircle, Plus, SendHorizonal, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatCurrency } from '../../shared/utils';
+import type { MessageTemplate } from '../../shared/types';
 import type { WhatsAppConversationItem } from '../whatsapp';
 
 export interface FunnelColumn {
@@ -11,11 +13,13 @@ export interface FunnelColumn {
 export interface FunnelCard {
   id: string;
   name: string;
+  email?: string | null;
   phone: string | null;
   avatarUrl: string | null;
   columnId: string;
   leadId?: string;
   source?: string | null;
+  temperature?: string | null;
   tags?: Array<{ id: string; name: string; color?: string | null }>;
   latestOrder?: {
     id: string;
@@ -37,6 +41,7 @@ interface FunnelBoardProps {
   onSelectFunnel: (funnelId: string) => void;
   onCreateFunnel: () => void;
   onConfigureFunnel: () => void;
+  onCopyEmail?: (email: string) => void;
   onOpenConversation: (conversation: { name: string; phone: string | null }) => void;
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void;
   onMoveCard: (cardId: string, columnId: string) => void;
@@ -49,6 +54,9 @@ interface FunnelBoardProps {
   showRecentConversations?: boolean;
   allowColumnManagement?: boolean;
   allowCreateStages?: boolean;
+  compactCheckoutCards?: boolean;
+  templates?: MessageTemplate[];
+  onSendTemplate?: (card: FunnelCard, columnName: string) => void;
 }
 
 type ModalState =
@@ -56,6 +64,27 @@ type ModalState =
   | { type: 'edit'; column: FunnelColumn }
   | { type: 'delete'; column: FunnelColumn }
   | null;
+
+function getOrderStatusColor(status?: string | null): string {
+  switch ((status ?? '').toUpperCase()) {
+    case 'APPROVED': return '#22c55e';
+    case 'DECLINED': return '#ef4444';
+    case 'PENDING': return '#06b6d4';
+    case 'REFUNDED': return '#f59e0b';
+    case 'CHARGEBACK': return '#7c3aed';
+    case 'ABANDONED': return '#94a3b8';
+    default: return '#334155';
+  }
+}
+
+function TemperatureBadge({ temperature }: { temperature?: string | null }) {
+  if (!temperature) return null;
+  const t = temperature.toUpperCase();
+  if (t === 'HOT') return <span className="crm-funnel-card-temp crm-funnel-card-temp-hot">🔥 Quente</span>;
+  if (t === 'WARM') return <span className="crm-funnel-card-temp crm-funnel-card-temp-warm">⚡ Morno</span>;
+  if (t === 'COLD') return <span className="crm-funnel-card-temp crm-funnel-card-temp-cold">❄️ Frio</span>;
+  return null;
+}
 
 function FunnelAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -90,6 +119,7 @@ export function FunnelBoard({
   onSelectFunnel,
   onCreateFunnel,
   onConfigureFunnel,
+  onCopyEmail,
   onOpenConversation,
   onAssignConversation,
   onMoveCard,
@@ -101,7 +131,9 @@ export function FunnelBoard({
   onClose,
   showRecentConversations = true,
   allowColumnManagement = true,
-  allowCreateStages = true
+  allowCreateStages = true,
+  compactCheckoutCards = false,
+  onSendTemplate
 }: FunnelBoardProps) {
   const [search, setSearch] = useState('');
   const [draggedConversation, setDraggedConversation] = useState<WhatsAppConversationItem | null>(null);
@@ -117,15 +149,21 @@ export function FunnelBoard({
   const normalizedSearch = search.trim().toLowerCase();
 
   const filteredConversations = useMemo(() => {
-    if (!normalizedSearch) {
-      return conversations;
-    }
-
+    if (!normalizedSearch) return conversations;
     return conversations.filter((item) => {
       const text = `${item.name} ${item.phone ?? ''}`.toLowerCase();
       return text.includes(normalizedSearch);
     });
   }, [conversations, normalizedSearch]);
+
+  const filteredCards = useMemo(() => {
+    if (!normalizedSearch) return cards;
+    return cards.filter((card) => {
+      const tagsText = (card.tags ?? []).map((tag) => tag.name).join(' ');
+      const text = `${card.name} ${card.email ?? ''} ${card.phone ?? ''} ${tagsText}`.toLowerCase();
+      return text.includes(normalizedSearch);
+    });
+  }, [cards, normalizedSearch]);
 
   const openCreateModal = () => {
     setFormName('');
@@ -150,17 +188,10 @@ export function FunnelBoard({
       return;
     }
 
-    if (!formName.trim()) {
-      return;
-    }
+    if (!formName.trim()) return;
 
-    if (modal?.type === 'create') {
-      onCreateColumn({ name: formName.trim(), color: formColor });
-    }
-
-    if (modal?.type === 'edit') {
-      onUpdateColumn({ id: modal.column.id, name: formName.trim(), color: formColor });
-    }
+    if (modal?.type === 'create') onCreateColumn({ name: formName.trim(), color: formColor });
+    if (modal?.type === 'edit') onUpdateColumn({ id: modal.column.id, name: formName.trim(), color: formColor });
 
     setModal(null);
   };
@@ -173,28 +204,19 @@ export function FunnelBoard({
         setScrollLeft(0);
         return;
       }
-
       const nextMaxScrollLeft = Math.max(0, element.scrollWidth - element.clientWidth);
       setMaxScrollLeft(nextMaxScrollLeft);
       setScrollLeft(Math.min(element.scrollLeft, nextMaxScrollLeft));
     };
 
     updateScrollMetrics();
-
     const element = columnsRef.current;
-    if (!element) {
-      return;
-    }
+    if (!element) return;
 
-    const handleScroll = () => {
-      setScrollLeft(element.scrollLeft);
-    };
-
+    const handleScroll = () => setScrollLeft(element.scrollLeft);
     element.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', updateScrollMetrics);
-    const resizeObserver = new ResizeObserver(() => {
-      updateScrollMetrics();
-    });
+    const resizeObserver = new ResizeObserver(() => updateScrollMetrics());
     resizeObserver.observe(element);
     window.requestAnimationFrame(updateScrollMetrics);
 
@@ -209,24 +231,26 @@ export function FunnelBoard({
     <>
       <section className="crm-funnel-overlay">
         <div className="crm-funnel-panel crm-scrollbar">
+
+          {/* ── Header ── */}
           <div className="crm-funnel-header">
             <div>
-              <p className="crm-funnel-kicker">Funil CRM</p>
-              <h2 className="crm-funnel-title">Gerencie seu funil de vendas</h2>
-              <p className="crm-funnel-subtitle">Gerencie seu funil de vendas</p>
+              <p className="crm-funnel-kicker">xCore CRM</p>
+              <h2 className="crm-funnel-title">{funnelName}</h2>
+              <p className="crm-funnel-subtitle">
+                {cards.length} lead{cards.length !== 1 ? 's' : ''} · {columns.length} etapa{columns.length !== 1 ? 's' : ''}
+              </p>
             </div>
             <div className="crm-funnel-actions">
               <label className="crm-funnel-select-wrap">
-                <span>Funil(s):</span>
+                <span>Funil:</span>
                 <select
                   className="crm-funnel-select"
                   value={selectedFunnelId}
                   onChange={(event) => onSelectFunnel(event.target.value)}
                 >
                   {funnels.map((funnel) => (
-                    <option key={funnel.id} value={funnel.id}>
-                      {funnel.name}
-                    </option>
+                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
                   ))}
                 </select>
               </label>
@@ -250,207 +274,284 @@ export function FunnelBoard({
             </div>
           </div>
 
+          {/* ── Columns ── */}
           <div ref={columnsRef} className="crm-funnel-columns crm-scrollbar">
+
+            {/* Recent conversations column */}
             {showRecentConversations ? (
-            <div className="crm-funnel-column crm-funnel-column-recent">
-            <div className="crm-funnel-column-head">
-              <div className="crm-funnel-column-title-wrap">
-                <span className="crm-funnel-dot crm-funnel-dot-green" />
-                <strong>Últimas Conversas</strong>
-              </div>
-              <span className="crm-funnel-count">{filteredConversations.length}</span>
-            </div>
-            <div className="crm-funnel-list crm-scrollbar">
-              {filteredConversations.map((conversation) => (
-                <article
-                  key={conversation.id}
-                  className="crm-funnel-card crm-funnel-card-accent"
-                  draggable
-                  onDragStart={() => setDraggedConversation(conversation)}
-                  onDragEnd={() => setDraggedConversation(null)}
-                >
-                  <div className="crm-funnel-card-top">
-                    <FunnelAvatar name={conversation.name} avatarUrl={conversation.avatarUrl} />
-                    <div className="crm-min-w-0">
-                      <h3 className="crm-funnel-card-name">{conversation.name}</h3>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="crm-funnel-card-btn"
-                    draggable={false}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onOpenConversation(conversation);
-                    }}
-                  >
-                    <MessageCircle className="crm-h-4 crm-w-4" />
-                    Mensagem
-                  </button>
-                </article>
-              ))}
-            </div>
-          </div>
-            ) : null}
-
-          {columns.map((column) => {
-            const columnCards = cards.filter((card) => card.columnId === column.id);
-
-            return (
-              <div
-                key={column.id}
-                className="crm-funnel-column"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={() => {
-                  if (draggedColumnId && draggedColumnId !== column.id) {
-                    onReorderColumns(draggedColumnId, column.id);
-                    setDraggedColumnId(null);
-                    return;
-                  }
-
-                  if (draggedConversation) {
-                    onAssignConversation(draggedConversation, column.id);
-                    setDraggedConversation(null);
-                  }
-
-                  if (draggedCardId) {
-                    onMoveCard(draggedCardId, column.id);
-                    setDraggedCardId(null);
-                  }
-                }}
-              >
+              <div className="crm-funnel-column crm-funnel-column-recent">
                 <div className="crm-funnel-column-head">
                   <div className="crm-funnel-column-title-wrap">
-                    <button
-                      type="button"
-                      className="crm-funnel-drag-handle"
-                      title="Arraste para reordenar"
-                      draggable={allowColumnManagement}
-                      onDragStart={(event) => {
-                        if (!allowColumnManagement) {
-                          event.preventDefault();
-                          return;
-                        }
-                        event.stopPropagation();
-                        setDraggedColumnId(column.id);
-                      }}
-                      onDragEnd={() => setDraggedColumnId(null)}
-                    >
-                      ⋮⋮
-                    </button>
-                    <span className="crm-funnel-dot" style={{ backgroundColor: column.color }} />
-                    <strong>{column.name}</strong>
+                    <span className="crm-funnel-dot crm-funnel-dot-green" />
+                    <strong>Últimas Conversas</strong>
                   </div>
-                  <div className="crm-funnel-column-tools">
-                    <span className="crm-funnel-count">{columnCards.length}</span>
-                    {allowColumnManagement ? (
-                      <>
-                        <button type="button" className="crm-funnel-icon-btn" onClick={() => openEditModal(column)}>
-                          <Settings className="crm-h-4 crm-w-4" />
-                        </button>
-                        <button type="button" className="crm-funnel-icon-btn" onClick={() => openDeleteModal(column)}>
-                          <X className="crm-h-4 crm-w-4" />
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
+                  <span className="crm-funnel-count">{filteredConversations.length}</span>
                 </div>
-
                 <div className="crm-funnel-list crm-scrollbar">
-                  {columnCards.length ? (
-                    columnCards.map((card) => (
-                      <article
-                        key={card.id}
-                        className="crm-funnel-card"
-                        draggable
-                        onDragStart={() => setDraggedCardId(card.id)}
-                        onDragEnd={() => setDraggedCardId(null)}
-                      >
-                        <div className="crm-funnel-card-top">
-                          <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
-                          <div className="crm-min-w-0 crm-funnel-card-main">
-                            <h3 className="crm-funnel-card-name">{card.name}</h3>
-                            {card.latestOrder?.productName ? (
-                              <p className="crm-funnel-card-meta">{card.latestOrder.productName}</p>
-                            ) : null}
-                            {card.source ? <p className="crm-funnel-card-meta">{card.source}</p> : null}
-                            {card.tags?.length ? (
-                              <div className="crm-funnel-card-tags">
-                                {card.tags.map((tag) => (
-                                  <span
-                                    key={tag.id}
-                                    className="crm-funnel-card-tag"
-                                    style={{
-                                      borderColor: `${tag.color ?? '#334155'}55`,
-                                      color: tag.color ?? '#cbd5e1'
-                                    }}
-                                  >
-                                    {tag.name}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
+                  {filteredConversations.map((conversation) => (
+                    <article
+                      key={conversation.id}
+                      className="crm-funnel-card crm-funnel-card-accent"
+                      draggable
+                      onDragStart={() => setDraggedConversation(conversation)}
+                      onDragEnd={() => setDraggedConversation(null)}
+                    >
+                      <div className="crm-funnel-card-top">
+                        <FunnelAvatar name={conversation.name} avatarUrl={conversation.avatarUrl} />
+                        <div className="crm-min-w-0 crm-funnel-card-main">
+                          <div className="crm-funnel-card-name-row">
+                            <h3 className="crm-funnel-card-name">{conversation.name}</h3>
                           </div>
-                          {allowColumnManagement ? (
-                            <button
-                              type="button"
-                              className="crm-funnel-card-remove"
-                              title="Remover contato"
-                              onClick={() => onRemoveCard(card.id)}
-                            >
-                              <X className="crm-h-4 crm-w-4" />
-                            </button>
+                          {conversation.phone ? (
+                            <p className="crm-funnel-card-meta">{conversation.phone}</p>
                           ) : null}
                         </div>
+                      </div>
+                      <div className="crm-funnel-card-actions">
                         <button
                           type="button"
-                          className="crm-funnel-card-btn"
+                          className="crm-funnel-card-btn-msg"
                           draggable={false}
-                          onMouseDown={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                          }}
+                          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
                           onClick={(event) => {
                             event.preventDefault();
                             event.stopPropagation();
-                            onOpenConversation(card);
+                            onOpenConversation(conversation);
                           }}
                         >
-                          <MessageCircle className="crm-h-4 crm-w-4" />
+                          <MessageCircle className="crm-h-3.5 crm-w-3.5" />
                           Mensagem
                         </button>
-                      </article>
-                    ))
-                  ) : (
-                    <div className="crm-funnel-empty">
-                      <p>Arraste contatos aqui</p>
-                    </div>
-                  )}
+                      </div>
+                    </article>
+                  ))}
                 </div>
               </div>
-            );
-          })}
+            ) : null}
 
+            {/* CRM columns */}
+            {columns.map((column) => {
+              const columnCards = filteredCards.filter((card) => card.columnId === column.id);
+
+              return (
+                <div
+                  key={column.id}
+                  className="crm-funnel-column"
+                  style={{ borderTopColor: column.color }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => {
+                    if (draggedColumnId && draggedColumnId !== column.id) {
+                      onReorderColumns(draggedColumnId, column.id);
+                      setDraggedColumnId(null);
+                      return;
+                    }
+                    if (draggedConversation) {
+                      onAssignConversation(draggedConversation, column.id);
+                      setDraggedConversation(null);
+                    }
+                    if (draggedCardId) {
+                      onMoveCard(draggedCardId, column.id);
+                      setDraggedCardId(null);
+                    }
+                  }}
+                >
+                  <div
+                    className="crm-funnel-column-head"
+                    style={{ background: `linear-gradient(135deg, ${column.color}1e 0%, transparent 65%)` }}
+                  >
+                    <div className="crm-funnel-column-title-wrap">
+                      <button
+                        type="button"
+                        className="crm-funnel-drag-handle"
+                        title="Arraste para reordenar"
+                        draggable={allowColumnManagement}
+                        onDragStart={(event) => {
+                          if (!allowColumnManagement) { event.preventDefault(); return; }
+                          event.stopPropagation();
+                          setDraggedColumnId(column.id);
+                        }}
+                        onDragEnd={() => setDraggedColumnId(null)}
+                      >
+                        ⋮⋮
+                      </button>
+                      <span className="crm-funnel-dot" style={{ backgroundColor: column.color, boxShadow: `0 0 6px ${column.color}80` }} />
+                      <strong>{column.name}</strong>
+                    </div>
+                    <div className="crm-funnel-column-tools">
+                      <span className="crm-funnel-count">{columnCards.length}</span>
+                      {allowColumnManagement ? (
+                        <>
+                          <button type="button" className="crm-funnel-icon-btn" onClick={() => openEditModal(column)}>
+                            <Settings className="crm-h-4 crm-w-4" />
+                          </button>
+                          <button type="button" className="crm-funnel-icon-btn" onClick={() => openDeleteModal(column)}>
+                            <X className="crm-h-4 crm-w-4" />
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="crm-funnel-list crm-scrollbar">
+                    {columnCards.length ? (
+                      columnCards.map((card) => {
+                        const statusColor = getOrderStatusColor(card.latestOrder?.status);
+
+                        return (
+                          <article
+                            key={card.id}
+                            className="crm-funnel-card"
+                            draggable
+                            onDragStart={() => setDraggedCardId(card.id)}
+                            onDragEnd={() => setDraggedCardId(null)}
+                          >
+                            {/* Colored status bar at top */}
+                            <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
+
+                            <div className="crm-funnel-card-top">
+                              <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
+                              <div className="crm-min-w-0 crm-funnel-card-main">
+                                <div className="crm-funnel-card-name-row">
+                                  <h3 className="crm-funnel-card-name">{card.name}</h3>
+                                  <TemperatureBadge temperature={card.temperature} />
+                                </div>
+
+                                {card.email ? (
+                                  <div className="crm-funnel-card-email-row">
+                                    <p className="crm-funnel-card-email">{card.email}</p>
+                                    {onCopyEmail ? (
+                                      <button
+                                        type="button"
+                                        className="crm-funnel-card-email-copy"
+                                        title="Copiar email"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          onCopyEmail(card.email!);
+                                        }}
+                                      >
+                                        <Copy className="crm-h-3 crm-w-3" />
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+
+                                {/* Amount — always visible on checkout cards */}
+                                {compactCheckoutCards && card.latestOrder ? (
+                                  <p className="crm-funnel-card-amount">
+                                    {formatCurrency(card.latestOrder.amount, card.latestOrder.currency)}
+                                    {card.latestOrder.productName ? (
+                                      <span className="crm-funnel-card-amount-product"> · {card.latestOrder.productName}</span>
+                                    ) : null}
+                                  </p>
+                                ) : null}
+
+                                {/* Product + source for non-checkout */}
+                                {!compactCheckoutCards && card.latestOrder?.productName ? (
+                                  <p className="crm-funnel-card-meta">{card.latestOrder.productName}</p>
+                                ) : null}
+                                {!compactCheckoutCards && card.source ? (
+                                  <p className="crm-funnel-card-meta">{card.source}</p>
+                                ) : null}
+
+                                {card.tags?.length ? (
+                                  <div className="crm-funnel-card-tags">
+                                    {card.tags.map((tag) => (
+                                      <span
+                                        key={tag.id}
+                                        className="crm-funnel-card-tag"
+                                        style={{
+                                          borderColor: `${tag.color ?? '#334155'}55`,
+                                          color: tag.color ?? '#cbd5e1'
+                                        }}
+                                      >
+                                        {tag.name}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              {allowColumnManagement ? (
+                                <button
+                                  type="button"
+                                  className="crm-funnel-card-remove"
+                                  title="Remover contato"
+                                  onClick={() => {
+                                    const confirmed = window.confirm(
+                                      `Deseja remover "${card.name}" desta etapa?`
+                                    );
+                                    if (confirmed) onRemoveCard(card.id);
+                                  }}
+                                >
+                                  <X className="crm-h-3.5 crm-w-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
+
+                            {/* Action buttons */}
+                            <div className="crm-funnel-card-actions">
+                              <button
+                                type="button"
+                                className="crm-funnel-card-btn-msg"
+                                draggable={false}
+                                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  onOpenConversation(card);
+                                }}
+                              >
+                                <MessageCircle className="crm-h-3.5 crm-w-3.5" />
+                                Mensagem
+                              </button>
+                              {compactCheckoutCards && onSendTemplate ? (
+                                <button
+                                  type="button"
+                                  className="crm-funnel-card-btn-tpl"
+                                  draggable={false}
+                                  title={`Enviar template para etapa ${column.name}`}
+                                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    onSendTemplate(card, column.name);
+                                  }}
+                                >
+                                  <SendHorizonal className="crm-h-3.5 crm-w-3.5" />
+                                </button>
+                              ) : null}
+                            </div>
+                          </article>
+                        );
+                      })
+                    ) : (
+                      <div className="crm-funnel-empty">
+                        <p>Arraste contatos aqui</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Create column */}
             {allowCreateStages ? (
-            <div className="crm-funnel-column crm-funnel-column-create">
-              <div className="crm-funnel-column-head">
-                <strong>Criar Nova Etapa</strong>
+              <div className="crm-funnel-column crm-funnel-column-create">
+                <div className="crm-funnel-column-head">
+                  <strong>Nova Etapa</strong>
+                </div>
+                <div className="crm-funnel-create-wrap">
+                  <button type="button" className="crm-funnel-create-btn" onClick={openCreateModal}>
+                    <Plus className="crm-h-7 crm-w-7" />
+                    Criar Nova Etapa
+                  </button>
+                </div>
               </div>
-              <div className="crm-funnel-create-wrap">
-                <button type="button" className="crm-funnel-create-btn" onClick={openCreateModal}>
-                  <Plus className="crm-h-7 crm-w-7" />
-                  Criar Nova Etapa
-                </button>
-              </div>
-            </div>
             ) : null}
           </div>
 
+          {/* Scroll range */}
           {maxScrollLeft > 0 ? (
             <div className="crm-funnel-scrollbar-shell">
               <input
@@ -471,16 +572,13 @@ export function FunnelBoard({
         </div>
       </section>
 
+      {/* ── Modal ── */}
       {modal ? (
         <div className="crm-modal-backdrop">
           <div className="crm-modal-card">
             <div className="crm-modal-header">
               <h3>
-                {modal.type === 'create'
-                  ? 'Nueva Lista'
-                  : modal.type === 'edit'
-                    ? 'Editar Lista'
-                    : 'Excluir Etapa'}
+                {modal.type === 'create' ? 'Nova Etapa' : modal.type === 'edit' ? 'Editar Etapa' : 'Excluir Etapa'}
               </h3>
               <button type="button" className="crm-modal-close" onClick={() => setModal(null)}>
                 <X className="crm-h-5 crm-w-5" />
@@ -490,10 +588,8 @@ export function FunnelBoard({
             <div className="crm-modal-body">
               {modal.type === 'delete' ? (
                 <div className="crm-modal-confirm">
-                  <p>
-                    Tem certeza que deseja excluir a etapa <strong>{modal.column.name}</strong>?
-                  </p>
-                  <span>Os contatos movidos para ela serão removidos dessa etapa.</span>
+                  <p>Tem certeza que deseja excluir a etapa <strong>{modal.column.name}</strong>?</p>
+                  <span>Os contatos nela serão removidos da etapa.</span>
                 </div>
               ) : (
                 <label className="crm-modal-label">
@@ -529,12 +625,8 @@ export function FunnelBoard({
 
             <div className="crm-modal-footer">
               {modal.type === 'edit' ? (
-                <button
-                  type="button"
-                  className="crm-modal-danger"
-                  onClick={() => openDeleteModal(modal.column)}
-                >
-                  Eliminar Lista
+                <button type="button" className="crm-modal-danger" onClick={() => openDeleteModal(modal.column)}>
+                  Excluir Etapa
                 </button>
               ) : null}
               <button type="button" className="crm-modal-secondary" onClick={() => setModal(null)}>
@@ -545,7 +637,7 @@ export function FunnelBoard({
                 className={modal.type === 'delete' ? 'crm-modal-danger-confirm' : 'crm-modal-primary'}
                 onClick={submitModal}
               >
-                {modal.type === 'create' ? 'Criar Etapa' : modal.type === 'edit' ? 'Salvar' : 'Sim, excluir'}
+                {modal.type === 'create' ? 'Criar' : modal.type === 'edit' ? 'Salvar' : 'Sim, excluir'}
               </button>
             </div>
           </div>

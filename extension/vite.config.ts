@@ -13,8 +13,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'popup.html'),
         background: resolve(__dirname, 'src/background/index.ts'),
-        content: resolve(__dirname, 'src/content/bootstrap.ts'),
-        'content-app': resolve(__dirname, 'src/content/content-app.tsx')
+        content: resolve(__dirname, 'src/content/content-app.tsx')
       },
       output: {
         entryFileNames: 'assets/[name].js',

@@ -31,11 +31,14 @@ const CHECKOUT_PIPELINE: PipelineSeed = {
   name: 'Checkout',
   isDefault: false,
   stages: [
-    { name: 'Checkout Iniciado', color: '#38bdf8', position: 1 },
-    { name: 'Pix Pendente', color: '#f59e0b', position: 2 },
-    { name: 'Cartão Recusado', color: '#ef4444', position: 3 },
-    { name: 'Compra Aprovada', color: '#22c55e', position: 4 },
-    { name: 'Perdido', color: '#94a3b8', position: 5 }
+    { name: 'Boleto Gerado', color: '#a78bfa', position: 1 },
+    { name: 'Pix Gerado', color: '#06b6d4', position: 2 },
+    { name: 'Carrinho Abandonado', color: '#94a3b8', position: 3 },
+    { name: 'Compra Recusada', color: '#ef4444', position: 4 },
+    { name: 'Reembolso', color: '#f59e0b', position: 5 },
+    { name: 'Chargeback', color: '#7c3aed', position: 6 },
+    { name: 'Aguardando Compra', color: '#facc15', position: 7 },
+    { name: 'Compra Aprovada', color: '#22c55e', position: 8 }
   ]
 };
 
@@ -71,6 +74,7 @@ const DEFAULT_TEMPLATES: Array<{ title: string; category: TemplateCategory; cont
 export async function ensureWorkspaceDefaultCrmSetup(db: DbClient, workspaceId: string) {
   const generalPipeline = await ensurePipeline(db, workspaceId, GENERAL_PIPELINE);
   const checkoutPipeline = await ensurePipeline(db, workspaceId, CHECKOUT_PIPELINE);
+  await migrateLegacyCheckoutStages(db, checkoutPipeline.id);
 
   await ensureCheckoutTags(db, workspaceId);
   await ensureDefaultTemplates(db, workspaceId);
@@ -104,20 +108,24 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
     });
   }
 
-  for (const stage of seed.stages) {
-    const existingStage = await db.pipelineStage.findFirst({
-      where: {
-        pipelineId: pipeline.id,
-        name: stage.name
-      }
-    });
+  const existingStages = await db.pipelineStage.findMany({
+    where: { pipelineId: pipeline.id },
+    orderBy: { position: 'asc' }
+  });
+
+  const maxExistingPosition = existingStages.reduce(
+    (highest, stage) => Math.max(highest, stage.position),
+    0
+  );
+
+  for (const [index, stage] of seed.stages.entries()) {
+    const existingStage = existingStages.find((currentStage) => currentStage.name === stage.name);
 
     if (existingStage) {
       await db.pipelineStage.update({
         where: { id: existingStage.id },
         data: {
-          color: stage.color,
-          position: stage.position
+          color: stage.color
         }
       });
       continue;
@@ -127,6 +135,40 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
       data: {
         pipelineId: pipeline.id,
         name: stage.name,
+        color: stage.color,
+        position: maxExistingPosition + index + 1
+      }
+    });
+  }
+
+  const refreshedStages = await db.pipelineStage.findMany({
+    where: { pipelineId: pipeline.id }
+  });
+
+  for (const [index, stage] of seed.stages.entries()) {
+    const currentStage = refreshedStages.find((item) => item.name === stage.name);
+    if (!currentStage) {
+      continue;
+    }
+
+    await db.pipelineStage.update({
+      where: { id: currentStage.id },
+      data: {
+        color: stage.color,
+        position: 1000 + index
+      }
+    });
+  }
+
+  for (const stage of seed.stages) {
+    const currentStage = refreshedStages.find((item) => item.name === stage.name);
+    if (!currentStage) {
+      continue;
+    }
+
+    await db.pipelineStage.update({
+      where: { id: currentStage.id },
+      data: {
         color: stage.color,
         position: stage.position
       }
@@ -191,5 +233,89 @@ async function ensureDefaultTemplates(db: DbClient, workspaceId: string) {
         content: template.content
       }
     });
+  }
+}
+
+async function migrateLegacyCheckoutStages(db: DbClient, pipelineId: string) {
+  const stages = await db.pipelineStage.findMany({
+    where: { pipelineId },
+    orderBy: { position: 'asc' }
+  });
+
+  const stageMap = new Map(stages.map((stage) => [stage.name.trim().toLowerCase(), stage]));
+  const legacyStages = stages.filter((stage) =>
+    ['checkout iniciado', 'pix pendente', 'cartão recusado', 'perdido'].includes(
+      stage.name.trim().toLowerCase()
+    )
+  );
+
+  if (!legacyStages.length) {
+    return;
+  }
+
+  const leads = await db.lead.findMany({
+    where: {
+      pipelineId,
+      currentStageId: {
+        in: legacyStages.map((stage) => stage.id)
+      }
+    },
+    include: {
+      tags: {
+        include: {
+          tag: true
+        }
+      }
+    }
+  });
+
+  for (const lead of leads) {
+    const currentStage = legacyStages.find((stage) => stage.id === lead.currentStageId);
+    if (!currentStage) {
+      continue;
+    }
+
+    const normalizedStageName = currentStage.name.trim().toLowerCase();
+    const hasChargebackTag = lead.tags.some((item) => item.tag.name === 'chargeback');
+    const hasRefundTag = lead.tags.some((item) => item.tag.name === 'reembolso');
+
+    const nextStageName =
+      normalizedStageName === 'checkout iniciado'
+        ? 'carrinho abandonado'
+        : normalizedStageName === 'pix pendente'
+          ? 'pix gerado'
+          : normalizedStageName === 'cartão recusado'
+            ? 'compra recusada'
+            : hasChargebackTag
+              ? 'chargeback'
+              : hasRefundTag
+                ? 'reembolso'
+                : 'carrinho abandonado';
+
+    const nextStage = stageMap.get(nextStageName);
+    if (!nextStage || nextStage.id === currentStage.id) {
+      continue;
+    }
+
+    await db.lead.update({
+      where: { id: lead.id },
+      data: {
+        currentStageId: nextStage.id
+      }
+    });
+  }
+
+  for (const stage of legacyStages) {
+    const leadsStillUsingStage = await db.lead.count({
+      where: {
+        currentStageId: stage.id
+      }
+    });
+
+    if (leadsStillUsingStage === 0) {
+      await db.pipelineStage.delete({
+        where: { id: stage.id }
+      });
+    }
   }
 }

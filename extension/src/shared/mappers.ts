@@ -93,17 +93,19 @@ export function mapTimelineItem(value: unknown): TimelineItem {
 
 export function mapLeadNote(value: unknown): LeadNote {
   const item = asObject(value);
+  const author = asObject(item.author);
 
   return {
     id: asString(item.id),
     content: asString(item.content),
     createdAt: asString(item.createdAt, new Date().toISOString()),
-    authorName: asNullableString(item.authorName ?? item.author?.name)
+    authorName: asNullableString(item.authorName ?? author.name)
   };
 }
 
 export function mapLeadTask(value: unknown): LeadTask {
   const item = asObject(value);
+  const assignedUser = asObject(item.assignedUser);
 
   return {
     id: asString(item.id),
@@ -111,7 +113,7 @@ export function mapLeadTask(value: unknown): LeadTask {
     description: asNullableString(item.description),
     dueAt: asNullableString(item.dueAt),
     status: asString(item.status, 'OPEN') as LeadTask['status'],
-    assignedUserName: asNullableString(item.assignedUserName ?? item.assignedUser?.name)
+    assignedUserName: asNullableString(item.assignedUserName ?? assignedUser.name)
   };
 }
 

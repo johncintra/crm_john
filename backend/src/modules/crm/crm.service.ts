@@ -14,6 +14,7 @@ import {
   TaskStatus
 } from '@prisma/client';
 import { ensureWorkspaceDefaultCrmSetup } from './default-workspace-setup';
+import { INTERNAL_CHECKOUT_TOKEN, INTERNAL_WORKSPACE_NAME } from './internal-crm.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -331,6 +332,7 @@ export class CrmService {
           id: lead.id,
           leadId: lead.id,
           name: lead.name,
+          email: lead.email,
           phone: lead.phone,
           normalizedPhone: lead.normalizedPhone,
           columnId: lead.currentStageId ?? checkoutPipeline.stages[0]?.id ?? null,
@@ -372,9 +374,19 @@ export class CrmService {
   }
 
   async ingestCheckoutEvent(provider: CheckoutProvider, token: string, dto: IngestCheckoutEventDto) {
-    const workspace = await this.prisma.workspace.findUnique({
+    let workspace = await this.prisma.workspace.findUnique({
       where: { checkoutToken: token }
     });
+
+    if (!workspace && token === INTERNAL_CHECKOUT_TOKEN) {
+      workspace = await this.prisma.workspace.create({
+        data: {
+          name: INTERNAL_WORKSPACE_NAME,
+          checkoutToken: INTERNAL_CHECKOUT_TOKEN
+        }
+      });
+      await ensureWorkspaceDefaultCrmSetup(this.prisma, workspace.id);
+    }
 
     if (!workspace) {
       throw new ForbiddenException('Invalid checkout token.');
@@ -383,41 +395,49 @@ export class CrmService {
     const { checkoutPipeline } = await ensureWorkspaceDefaultCrmSetup(this.prisma, workspace.id);
 
     const normalizedPhone = this.normalizePhone(dto.phone);
+    const normalizedEmail = dto.email?.trim().toLowerCase() || null;
     if (!normalizedPhone) {
       throw new BadRequestException('A valid phone number is required.');
     }
 
-    const targetStage = this.pickStageForOrderStatus(checkoutPipeline.stages, dto.status);
+    const targetStage = this.pickStageForOrderStatus(
+      checkoutPipeline.stages,
+      dto.status,
+      dto.paymentMethod
+    );
 
     const result = await this.prisma.$transaction(async (tx) => {
       const tagRegistry = await this.loadCheckoutTags(tx, workspace.id);
-      const lead =
+      const existingLead =
         (await tx.lead.findFirst({
-          where: {
-            workspaceId: workspace.id,
-            normalizedPhone
-          }
+          where: { workspaceId: workspace.id, normalizedPhone }
         })) ??
-        (await tx.lead.create({
-          data: {
-            workspaceId: workspace.id,
-            pipelineId: checkoutPipeline.id,
-            currentStageId: targetStage?.id ?? checkoutPipeline.stages[0]?.id ?? null,
-            name: dto.name?.trim() || normalizedPhone,
-            email: dto.email?.trim() || null,
-            phone: dto.phone,
-            normalizedPhone,
-            source: dto.source?.trim() || `${provider} Checkout`,
-            temperature: dto.temperature ?? this.temperatureFromOrderStatus(dto.status),
-            cpf: dto.cpf?.trim() || null
-          }
-        }));
+        (normalizedEmail
+          ? await tx.lead.findFirst({
+              where: { workspaceId: workspace.id, email: normalizedEmail }
+            })
+          : null);
+
+      const lead = existingLead ?? (await tx.lead.create({
+        data: {
+          workspaceId: workspace.id,
+          pipelineId: checkoutPipeline.id,
+          currentStageId: targetStage?.id ?? checkoutPipeline.stages[0]?.id ?? null,
+          name: dto.name?.trim() || normalizedPhone,
+          email: normalizedEmail || null,
+          phone: dto.phone,
+          normalizedPhone,
+          source: dto.source?.trim() || `${provider} Checkout`,
+          temperature: dto.temperature ?? this.temperatureFromOrderStatus(dto.status),
+          cpf: dto.cpf?.trim() || null
+        }
+      }));
 
       const updatedLead = await tx.lead.update({
         where: { id: lead.id },
         data: {
           name: dto.name?.trim() || lead.name,
-          email: dto.email?.trim() || lead.email,
+          email: normalizedEmail || lead.email,
           phone: dto.phone || lead.phone,
           normalizedPhone,
           source: dto.source?.trim() || lead.source,
@@ -482,7 +502,7 @@ export class CrmService {
         data: {
           leadId: updatedLead.id,
           type: LeadEventType.CHECKOUT_EVENT,
-          title: this.timelineTitleFromStatus(dto.status),
+          title: this.timelineTitleFromStatus(dto.status, dto.paymentMethod),
           description:
             dto.description ??
             `${dto.productName} em ${provider} com status ${dto.status}.`,
@@ -809,37 +829,52 @@ export class CrmService {
 
   private pickStageForOrderStatus(
     stages: Array<{ id: string; name: string; color: string | null; position: number }>,
-    status: OrderStatus
+    status: OrderStatus,
+    paymentMethod?: string | null
   ) {
+    const normalizedPaymentMethod = (paymentMethod ?? '').trim().toLowerCase();
+    const isPix = normalizedPaymentMethod.includes('pix');
+    const isBoleto =
+      normalizedPaymentMethod.includes('boleto') ||
+      normalizedPaymentMethod.includes('billet') ||
+      normalizedPaymentMethod.includes('bank_slip');
+
     const targetName = {
       APPROVED: 'compra aprovada',
-      DECLINED: 'cartão recusado',
-      PENDING: 'pix pendente',
-      OPEN: 'checkout iniciado',
-      ABANDONED: 'checkout iniciado',
-      REFUNDED: 'perdido',
-      CHARGEBACK: 'perdido'
+      DECLINED: 'compra recusada',
+      PENDING: isBoleto ? 'boleto gerado' : 'pix gerado',
+      OPEN: isBoleto ? 'boleto gerado' : isPix ? 'pix gerado' : 'carrinho abandonado',
+      ABANDONED: 'carrinho abandonado',
+      REFUNDED: 'reembolso',
+      CHARGEBACK: 'chargeback'
     }[status];
 
     return stages.find((stage) => stage.name.trim().toLowerCase() === targetName) ?? null;
   }
 
-  private timelineTitleFromStatus(status: OrderStatus) {
+  private timelineTitleFromStatus(status: OrderStatus, paymentMethod?: string | null) {
+    const normalizedPaymentMethod = (paymentMethod ?? '').trim().toLowerCase();
+    const isPix = normalizedPaymentMethod.includes('pix');
+    const isBoleto =
+      normalizedPaymentMethod.includes('boleto') ||
+      normalizedPaymentMethod.includes('billet') ||
+      normalizedPaymentMethod.includes('bank_slip');
+
     switch (status) {
       case OrderStatus.APPROVED:
         return 'Compra aprovada';
       case OrderStatus.PENDING:
-        return 'Pix gerado';
+        return isBoleto ? 'Boleto gerado' : 'Pix gerado';
       case OrderStatus.DECLINED:
-        return 'Cartão recusado';
+        return 'Compra recusada';
       case OrderStatus.ABANDONED:
-        return 'Checkout abandonado';
+        return 'Carrinho abandonado';
       case OrderStatus.REFUNDED:
         return 'Reembolso registrado';
       case OrderStatus.CHARGEBACK:
         return 'Chargeback registrado';
       default:
-        return 'Checkout iniciado';
+        return isBoleto ? 'Boleto gerado' : isPix ? 'Pix gerado' : 'Checkout iniciado';
     }
   }
 
