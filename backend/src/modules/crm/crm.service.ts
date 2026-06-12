@@ -580,6 +580,164 @@ export class CrmService {
     };
   }
 
+  async listPipelines(userId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipelines = await this.prisma.pipeline.findMany({
+      where: { workspaceId, isCheckout: false },
+      include: { stages: { orderBy: { position: 'asc' } } },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }]
+    });
+    return pipelines.map((p) => ({
+      id: p.id,
+      name: p.name,
+      isDefault: p.isDefault,
+      columns: p.stages.map((s) => ({ id: s.id, name: s.name, color: s.color ?? '#64748b', position: s.position }))
+    }));
+  }
+
+  async createPipeline(userId: string, name: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipeline = await this.prisma.pipeline.create({
+      data: { workspaceId, name, isDefault: false, isCheckout: false },
+      include: { stages: true }
+    });
+    return { id: pipeline.id, name: pipeline.name, isDefault: pipeline.isDefault, columns: [] };
+  }
+
+  async renamePipeline(userId: string, pipelineId: string, name: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    const updated = await this.prisma.pipeline.update({ where: { id: pipelineId }, data: { name } });
+    return { id: updated.id, name: updated.name };
+  }
+
+  async deletePipeline(userId: string, pipelineId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipeline = await this.requirePipeline(workspaceId, pipelineId);
+    if (pipeline.isDefault) throw new BadRequestException('O funil padrão não pode ser excluído.');
+    await this.prisma.pipeline.delete({ where: { id: pipelineId } });
+  }
+
+  async getPipelineBoard(userId: string, pipelineId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipeline = await this.requirePipeline(workspaceId, pipelineId);
+    const leads = await this.prisma.lead.findMany({
+      where: { workspaceId, pipelineId },
+      include: {
+        currentStage: true,
+        tags: { include: { tag: true } },
+        orders: { orderBy: { createdAt: 'desc' }, take: 1 }
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
+    });
+    return {
+      funnel: { id: pipeline.id, name: pipeline.name },
+      columns: pipeline.stages.map((s) => ({ id: s.id, name: s.name, color: s.color ?? '#64748b', position: s.position })),
+      cards: leads.map((lead) => {
+        const latestOrder = lead.orders[0] ?? null;
+        return {
+          id: lead.id,
+          leadId: lead.id,
+          name: lead.name,
+          email: lead.email,
+          phone: lead.phone,
+          avatarUrl: null,
+          columnId: lead.currentStageId ?? pipeline.stages[0]?.id ?? null,
+          source: lead.source,
+          temperature: lead.temperature,
+          tags: lead.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
+          latestOrder: latestOrder ? {
+            id: latestOrder.id,
+            productName: latestOrder.productName,
+            amount: latestOrder.amount,
+            currency: latestOrder.currency,
+            status: latestOrder.status,
+            provider: latestOrder.provider
+          } : null
+        };
+      })
+    };
+  }
+
+  async createStage(userId: string, pipelineId: string, name: string, color: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipeline = await this.requirePipeline(workspaceId, pipelineId);
+    const maxPosition = pipeline.stages.reduce((max, s) => Math.max(max, s.position), 0);
+    const stage = await this.prisma.pipelineStage.create({
+      data: { pipelineId, name, color, position: maxPosition + 1 }
+    });
+    return { id: stage.id, name: stage.name, color: stage.color ?? color, position: stage.position };
+  }
+
+  async updateStage(userId: string, pipelineId: string, stageId: string, name: string, color: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    const stage = await this.prisma.pipelineStage.update({
+      where: { id: stageId },
+      data: { name, color }
+    });
+    return { id: stage.id, name: stage.name, color: stage.color ?? color, position: stage.position };
+  }
+
+  async deleteStage(userId: string, pipelineId: string, stageId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    await this.prisma.lead.updateMany({ where: { currentStageId: stageId }, data: { currentStageId: null } });
+    await this.prisma.pipelineStage.delete({ where: { id: stageId } });
+  }
+
+  async reorderStages(userId: string, pipelineId: string, stageId: string, targetStageId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const pipeline = await this.requirePipeline(workspaceId, pipelineId);
+    const stages = [...pipeline.stages].sort((a, b) => a.position - b.position);
+    const fromIdx = stages.findIndex((s) => s.id === stageId);
+    const toIdx = stages.findIndex((s) => s.id === targetStageId);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const [moved] = stages.splice(fromIdx, 1);
+    stages.splice(toIdx, 0, moved);
+    await this.prisma.$transaction(
+      stages.map((s, i) => this.prisma.pipelineStage.update({ where: { id: s.id }, data: { position: i + 1 } }))
+    );
+  }
+
+  async assignContactToStage(userId: string, pipelineId: string, stageId: string, contact: { name: string; phone?: string | null }) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    const normalizedPhone = this.normalizePhone(contact.phone);
+    let lead = normalizedPhone
+      ? await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, normalizedPhone } })
+      : null;
+    if (lead) {
+      lead = await this.prisma.lead.update({ where: { id: lead.id }, data: { currentStageId: stageId, name: contact.name } });
+    } else {
+      lead = await this.prisma.lead.create({
+        data: { workspaceId, pipelineId, name: contact.name, phone: contact.phone, normalizedPhone, currentStageId: stageId }
+      });
+    }
+    return { id: lead.id, leadId: lead.id, name: lead.name, phone: lead.phone, email: lead.email, avatarUrl: null, columnId: stageId, source: lead.source, temperature: lead.temperature, tags: [], latestOrder: null };
+  }
+
+  async moveCard(userId: string, pipelineId: string, leadId: string, stageId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    await this.prisma.lead.update({ where: { id: leadId }, data: { currentStageId: stageId } });
+  }
+
+  async removeCard(userId: string, pipelineId: string, leadId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requirePipeline(workspaceId, pipelineId);
+    await this.prisma.lead.update({ where: { id: leadId }, data: { currentStageId: null } });
+  }
+
+  private async requirePipeline(workspaceId: string, pipelineId: string) {
+    const pipeline = await this.prisma.pipeline.findFirst({
+      where: { id: pipelineId, workspaceId, isCheckout: false },
+      include: { stages: { orderBy: { position: 'asc' } } }
+    });
+    if (!pipeline) throw new NotFoundException('Pipeline não encontrado.');
+    return pipeline;
+  }
+
   private async getWorkspaceId(userId: string) {
     const membership = await this.prisma.membership.findFirst({
       where: { userId },

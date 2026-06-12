@@ -2,7 +2,10 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -18,6 +21,13 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { UpdateLeadStageDto } from './dto/update-lead-stage.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
+import { PipelineCreateDto } from './dto/pipeline-create.dto';
+import { PipelineRenameDto } from './dto/pipeline-rename.dto';
+import { StageCreateDto } from './dto/stage-create.dto';
+import { StageUpdateDto } from './dto/stage-update.dto';
+import { StagesReorderDto } from './dto/stages-reorder.dto';
+import { CardAssignDto } from './dto/card-assign.dto';
+import { CardMoveDto } from './dto/card-move.dto';
 
 @Controller()
 export class CrmController {
@@ -109,6 +119,91 @@ export class CrmController {
     @Body() dto: UpdateTaskStatusDto
   ) {
     return this.crmService.updateTaskStatus(user.sub, taskId, dto.status);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('pipelines')
+  listPipelines(@CurrentUser() user: AuthUser) {
+    return this.crmService.listPipelines(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pipelines')
+  createPipeline(@CurrentUser() user: AuthUser, @Body() dto: PipelineCreateDto) {
+    return this.crmService.createPipeline(user.sub, dto.name);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('pipelines/:id')
+  renamePipeline(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: PipelineRenameDto) {
+    return this.crmService.renamePipeline(user.sub, id, dto.name);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('pipelines/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deletePipeline(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.crmService.deletePipeline(user.sub, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('pipelines/:id/board')
+  getPipelineBoard(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.crmService.getPipelineBoard(user.sub, id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pipelines/:id/stages')
+  createStage(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: StageCreateDto) {
+    return this.crmService.createStage(user.sub, id, dto.name, dto.color ?? '#64748b');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('pipelines/:id/stages/:stageId')
+  updateStage(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('stageId') stageId: string,
+    @Body() dto: StageUpdateDto
+  ) {
+    return this.crmService.updateStage(user.sub, id, stageId, dto.name, dto.color ?? '#64748b');
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('pipelines/:id/stages/:stageId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteStage(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('stageId') stageId: string) {
+    return this.crmService.deleteStage(user.sub, id, stageId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pipelines/:id/stages/reorder')
+  reorderStages(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: StagesReorderDto) {
+    return this.crmService.reorderStages(user.sub, id, dto.stageId, dto.targetStageId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('pipelines/:id/cards')
+  assignContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CardAssignDto) {
+    return this.crmService.assignContactToStage(user.sub, id, dto.stageId, { name: dto.name, phone: dto.phone });
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('pipelines/:id/cards/:leadId/move')
+  moveCard(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Param('leadId') leadId: string,
+    @Body() dto: CardMoveDto
+  ) {
+    return this.crmService.moveCard(user.sub, id, leadId, dto.stageId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('pipelines/:id/cards/:leadId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeCard(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('leadId') leadId: string) {
+    return this.crmService.removeCard(user.sub, id, leadId);
   }
 
   @Post('webhooks/checkouts/:provider/:token')

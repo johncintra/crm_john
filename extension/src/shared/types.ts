@@ -139,6 +139,38 @@ export interface PipelineData {
   stages: PipelineStage[];
 }
 
+export interface RemotePipeline {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  columns: Array<{ id: string; name: string; color: string; position: number }>;
+}
+
+export interface RemotePipelineBoard {
+  funnel: { id: string; name: string };
+  columns: Array<{ id: string; name: string; color: string; position: number }>;
+  cards: Array<{
+    id: string;
+    leadId: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    avatarUrl: null;
+    columnId: string | null;
+    source?: string | null;
+    temperature?: string | null;
+    tags: Array<{ id: string; name: string; color?: string | null }>;
+    latestOrder: {
+      id: string;
+      productName: string;
+      amount: number;
+      currency: string;
+      status: string;
+      provider: string;
+    } | null;
+  }>;
+}
+
 export interface LeadContext {
   lead: LeadSummary;
   timeline: TimelineItem[];
@@ -176,7 +208,19 @@ export type BackgroundRequest =
   | { type: 'lead:add-note'; payload: { leadId: string; content: string } }
   | { type: 'lead:create-task'; payload: { leadId: string; title: string; description?: string } }
   | { type: 'task:update-status'; payload: { taskId: string; status: TaskStatus } }
-  | { type: 'lead:update-stage'; payload: { leadId: string; stageId: string } };
+  | { type: 'lead:update-stage'; payload: { leadId: string; stageId: string } }
+  | { type: 'pipeline:fetch-list' }
+  | { type: 'pipeline:create'; payload: { name: string } }
+  | { type: 'pipeline:rename'; payload: { id: string; name: string } }
+  | { type: 'pipeline:delete'; payload: { id: string } }
+  | { type: 'pipeline:fetch-board'; payload: { id: string } }
+  | { type: 'pipeline:create-stage'; payload: { pipelineId: string; name: string; color: string } }
+  | { type: 'pipeline:update-stage'; payload: { pipelineId: string; stageId: string; name: string; color: string } }
+  | { type: 'pipeline:delete-stage'; payload: { pipelineId: string; stageId: string } }
+  | { type: 'pipeline:reorder-stages'; payload: { pipelineId: string; stageId: string; targetStageId: string } }
+  | { type: 'pipeline:assign-contact'; payload: { pipelineId: string; stageId: string; name: string; phone?: string | null } }
+  | { type: 'pipeline:move-card'; payload: { pipelineId: string; leadId: string; stageId: string } }
+  | { type: 'pipeline:remove-card'; payload: { pipelineId: string; leadId: string } };
 
 export type BackgroundResponse =
   | { ok: true; data?: unknown }

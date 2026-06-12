@@ -11,6 +11,7 @@ type StageSeed = {
 type PipelineSeed = {
   name: string;
   isDefault: boolean;
+  isCheckout?: boolean;
   stages: StageSeed[];
 };
 
@@ -30,6 +31,7 @@ const GENERAL_PIPELINE: PipelineSeed = {
 const CHECKOUT_PIPELINE: PipelineSeed = {
   name: 'Checkout',
   isDefault: false,
+  isCheckout: true,
   stages: [
     { name: 'Boleto Gerado', color: '#a78bfa', position: 1 },
     { name: 'Pix Gerado', color: '#06b6d4', position: 2 },
@@ -98,13 +100,14 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
       data: {
         workspaceId,
         name: seed.name,
-        isDefault: seed.isDefault
+        isDefault: seed.isDefault,
+        isCheckout: seed.isCheckout ?? false
       }
     });
   } else if (pipeline.isDefault !== seed.isDefault) {
     pipeline = await db.pipeline.update({
       where: { id: pipeline.id },
-      data: { isDefault: seed.isDefault }
+      data: { isDefault: seed.isDefault, isCheckout: seed.isCheckout ?? false }
     });
   }
 

@@ -1,13 +1,25 @@
 import {
   addLeadNote,
+  assignContactToStage,
   createLeadTask,
+  createPipeline,
+  createPipelineStage,
+  deletePipeline,
+  deletePipelineStage,
   fetchCheckoutBoard,
   fetchLeadContext,
+  fetchPipelineBoard,
+  fetchPipelines,
   fetchWorkspaceTemplates,
   getProfile,
   login,
+  movePipelineCard,
+  removePipelineCard,
+  renamePipeline,
+  reorderPipelineStages,
   updateApiBaseUrl,
   updateLeadStage,
+  updatePipelineStage,
   updateTaskStatus
 } from './api';
 import { clearStoredSession, getStoredSession } from '../shared/storage';
@@ -77,6 +89,66 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         }
         case 'lead:update-stage': {
           await updateLeadStage(message.payload.leadId, message.payload.stageId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:fetch-list': {
+          const data = await fetchPipelines();
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:create': {
+          const data = await createPipeline(message.payload.name);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:rename': {
+          await renamePipeline(message.payload.id, message.payload.name);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:delete': {
+          await deletePipeline(message.payload.id);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:fetch-board': {
+          const data = await fetchPipelineBoard(message.payload.id);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:create-stage': {
+          const data = await createPipelineStage(message.payload.pipelineId, message.payload.name, message.payload.color);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:update-stage': {
+          await updatePipelineStage(message.payload.pipelineId, message.payload.stageId, message.payload.name, message.payload.color);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:delete-stage': {
+          await deletePipelineStage(message.payload.pipelineId, message.payload.stageId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:reorder-stages': {
+          await reorderPipelineStages(message.payload.pipelineId, message.payload.stageId, message.payload.targetStageId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:assign-contact': {
+          const data = await assignContactToStage(message.payload.pipelineId, message.payload.stageId, message.payload.name, message.payload.phone);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:move-card': {
+          await movePipelineCard(message.payload.pipelineId, message.payload.leadId, message.payload.stageId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'pipeline:remove-card': {
+          await removePipelineCard(message.payload.pipelineId, message.payload.leadId);
           sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }

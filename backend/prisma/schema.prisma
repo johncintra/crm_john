@@ -103,6 +103,7 @@ model Pipeline {
   workspaceId String
   name        String
   isDefault   Boolean         @default(false)
+  isCheckout  Boolean         @default(false)
   stages      PipelineStage[]
   leads       Lead[]
   workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)

@@ -1,5 +1,6 @@
 import { mapLeadContext, mapTemplate } from '../shared/mappers';
 import { getStoredSession, setStoredSession } from '../shared/storage';
+import type { RemotePipeline, RemotePipelineBoard } from '../shared/types';
 import {
   activatePreviewSession,
   addPreviewLeadNote,
@@ -281,4 +282,54 @@ export async function updateLeadStage(leadId: string, stageId: string): Promise<
     method: 'PATCH',
     body: { stageId }
   });
+}
+
+export async function fetchPipelines(): Promise<RemotePipeline[]> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return [];
+  return request<RemotePipeline[]>('/pipelines');
+}
+
+export async function createPipeline(name: string): Promise<RemotePipeline> {
+  return request<RemotePipeline>('/pipelines', { method: 'POST', body: { name } });
+}
+
+export async function renamePipeline(id: string, name: string): Promise<void> {
+  await request(`/pipelines/${id}`, { method: 'PATCH', body: { name } });
+}
+
+export async function deletePipeline(id: string): Promise<void> {
+  await request(`/pipelines/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchPipelineBoard(id: string): Promise<RemotePipelineBoard> {
+  return request<RemotePipelineBoard>(`/pipelines/${id}/board`);
+}
+
+export async function createPipelineStage(pipelineId: string, name: string, color: string): Promise<{ id: string; name: string; color: string; position: number }> {
+  return request(`/pipelines/${pipelineId}/stages`, { method: 'POST', body: { name, color } });
+}
+
+export async function updatePipelineStage(pipelineId: string, stageId: string, name: string, color: string): Promise<void> {
+  await request(`/pipelines/${pipelineId}/stages/${stageId}`, { method: 'PATCH', body: { name, color } });
+}
+
+export async function deletePipelineStage(pipelineId: string, stageId: string): Promise<void> {
+  await request(`/pipelines/${pipelineId}/stages/${stageId}`, { method: 'DELETE' });
+}
+
+export async function reorderPipelineStages(pipelineId: string, stageId: string, targetStageId: string): Promise<void> {
+  await request(`/pipelines/${pipelineId}/stages/reorder`, { method: 'POST', body: { stageId, targetStageId } });
+}
+
+export async function assignContactToStage(pipelineId: string, stageId: string, name: string, phone?: string | null): Promise<RemotePipelineBoard['cards'][number]> {
+  return request(`/pipelines/${pipelineId}/cards`, { method: 'POST', body: { stageId, name, phone } });
+}
+
+export async function movePipelineCard(pipelineId: string, leadId: string, stageId: string): Promise<void> {
+  await request(`/pipelines/${pipelineId}/cards/${leadId}/move`, { method: 'PATCH', body: { stageId } });
+}
+
+export async function removePipelineCard(pipelineId: string, leadId: string): Promise<void> {
+  await request(`/pipelines/${pipelineId}/cards/${leadId}`, { method: 'DELETE' });
 }

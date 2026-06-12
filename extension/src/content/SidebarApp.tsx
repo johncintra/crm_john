@@ -31,10 +31,6 @@ interface SavedFunnel {
   cards: FunnelCard[];
 }
 
-const FUNNELS_STORAGE_KEY = 'crm-john-funnels';
-const SELECTED_FUNNEL_STORAGE_KEY = 'crm-john-selected-funnel-id';
-const LEGACY_BOARD_COLUMNS_STORAGE_KEY = 'crm-john-funnel-columns';
-const LEGACY_BOARD_CARDS_STORAGE_KEY = 'crm-john-funnel-cards';
 const CHECKOUT_FUNNEL_ID = '__checkout_funnel__';
 const CHECKOUT_FALLBACK_COLUMNS: FunnelColumn[] = [
   { id: 'checkout-fallback-boleto', name: 'Boleto Gerado', color: '#a78bfa' },
@@ -47,15 +43,6 @@ const CHECKOUT_FALLBACK_COLUMNS: FunnelColumn[] = [
   { id: 'checkout-fallback-approved', name: 'Compra Aprovada', color: '#22c55e' }
 ];
 
-function createDefaultFunnel(columns: FunnelColumn[] = [], cards: FunnelCard[] = []): SavedFunnel {
-  return {
-    id: `funnel-${Date.now()}`,
-    name: 'CRM General (Funil Principal)',
-    columns,
-    cards
-  };
-}
-
 export function SidebarApp() {
   const sendMessage = useBackground();
   const conversation = useWhatsAppConversation();
@@ -67,6 +54,7 @@ export function SidebarApp() {
   const [isRailOpen, setIsRailOpen] = useState(false);
   const [funnels, setFunnels] = useState<SavedFunnel[]>([]);
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>('');
+  const [funnelsLoaded, setFunnelsLoaded] = useState(false);
   const [checkoutBoard, setCheckoutBoard] = useState<CheckoutBoardData | null>(null);
   const [workspaceTemplates, setWorkspaceTemplates] = useState<MessageTemplate[]>([]);
   const isCheckoutFunnelSelected = selectedFunnelId === CHECKOUT_FUNNEL_ID;
@@ -284,50 +272,44 @@ export function SidebarApp() {
     return () => window.clearInterval(interval);
   }, [loadCheckoutBoard, selectedFunnelId, workspaceView]);
 
-  useEffect(() => {
-    void chrome.storage.local
-      .get([
-        FUNNELS_STORAGE_KEY,
-        SELECTED_FUNNEL_STORAGE_KEY,
-        LEGACY_BOARD_COLUMNS_STORAGE_KEY,
-        LEGACY_BOARD_CARDS_STORAGE_KEY
-      ])
-      .then((result) => {
-        const storedFunnels = result[FUNNELS_STORAGE_KEY];
-        const storedSelectedFunnelId = result[SELECTED_FUNNEL_STORAGE_KEY];
-        const legacyColumns = result[LEGACY_BOARD_COLUMNS_STORAGE_KEY];
-        const legacyCards = result[LEGACY_BOARD_CARDS_STORAGE_KEY];
-
-        if (Array.isArray(storedFunnels) && storedFunnels.length) {
-          setFunnels(storedFunnels as SavedFunnel[]);
-          setSelectedFunnelId(
-            typeof storedSelectedFunnelId === 'string'
-              ? storedSelectedFunnelId
-              : (storedFunnels[0] as SavedFunnel).id
-          );
-          return;
-        }
-
-        const defaultFunnel = createDefaultFunnel(
-          Array.isArray(legacyColumns) ? (legacyColumns as FunnelColumn[]) : [],
-          Array.isArray(legacyCards) ? (legacyCards as FunnelCard[]) : []
-        );
-
-        setFunnels([defaultFunnel]);
-        setSelectedFunnelId(defaultFunnel.id);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!funnels.length) {
-      return;
+  const loadFunnels = useCallback(async () => {
+    try {
+      const pipelines = await sendMessage<Array<{ id: string; name: string; isDefault: boolean; columns: Array<{ id: string; name: string; color: string }> }>>({ type: 'pipeline:fetch-list' });
+      if (!pipelines.length) {
+        const created = await sendMessage<{ id: string; name: string }>({ type: 'pipeline:create', payload: { name: 'CRM General (Funil Principal)' } });
+        setFunnels([{ id: created.id, name: created.name, columns: [], cards: [] }]);
+        setSelectedFunnelId(created.id);
+      } else {
+        setFunnels(pipelines.map((p) => ({ id: p.id, name: p.name, columns: p.columns.map((c) => ({ id: c.id, name: c.name, color: c.color })), cards: [] })));
+        setSelectedFunnelId(pipelines[0].id);
+      }
+    } catch {
+      const fallback: SavedFunnel = { id: `funnel-${Date.now()}`, name: 'CRM General (Funil Principal)', columns: [], cards: [] };
+      setFunnels([fallback]);
+      setSelectedFunnelId(fallback.id);
+    } finally {
+      setFunnelsLoaded(true);
     }
+  }, [sendMessage]);
 
-    void chrome.storage.local.set({
-      [FUNNELS_STORAGE_KEY]: funnels,
-      [SELECTED_FUNNEL_STORAGE_KEY]: selectedFunnelId || funnels[0]?.id || ''
-    });
-  }, [funnels, selectedFunnelId]);
+  useEffect(() => { void loadFunnels(); }, [loadFunnels]);
+
+  const loadFunnelBoard = useCallback(async (pipelineId: string) => {
+    try {
+      const board = await sendMessage<{ funnel: { id: string; name: string }; columns: Array<{ id: string; name: string; color: string }>; cards: Array<{ id: string; leadId: string; name: string; email?: string | null; phone?: string | null; avatarUrl: null; columnId: string | null; source?: string | null; temperature?: string | null; tags: Array<{ id: string; name: string; color?: string | null }>; latestOrder: unknown }> }>({ type: 'pipeline:fetch-board', payload: { id: pipelineId } });
+      setFunnels((prev) => prev.map((f) => f.id !== pipelineId ? f : {
+        ...f,
+        name: board.funnel.name,
+        columns: board.columns.map((c) => ({ id: c.id, name: c.name, color: c.color })),
+        cards: board.cards.map((c) => ({ id: c.id, leadId: c.leadId, name: c.name, email: c.email ?? null, phone: c.phone ?? null, avatarUrl: null, columnId: c.columnId ?? f.columns[0]?.id ?? '', source: c.source ?? null, temperature: c.temperature ?? null, tags: c.tags, latestOrder: c.latestOrder as FunnelCard['latestOrder'] }))
+      }));
+    } catch { /* keep existing state on error */ }
+  }, [sendMessage]);
+
+  useEffect(() => {
+    if (!funnelsLoaded || !selectedFunnelId || selectedFunnelId === CHECKOUT_FUNNEL_ID) return;
+    void loadFunnelBoard(selectedFunnelId);
+  }, [funnelsLoaded, selectedFunnelId, loadFunnelBoard]);
 
   useEffect(() => {
     if (!selectedFunnelId && funnels[0]) {
@@ -526,117 +508,49 @@ export function SidebarApp() {
   };
 
   const handleCreateColumn = ({ name, color }: { name: string; color: string }) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) =>
-        funnel.id === selectedLocalFunnel.id
-          ? { ...funnel, columns: [...funnel.columns, { id: `column-${Date.now()}`, name, color }] }
-          : funnel
-      )
-    );
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    const tempId = `column-${Date.now()}`;
+    setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, columns: [...f.columns, { id: tempId, name, color }] }));
+    void sendMessage<{ id: string }>({ type: 'pipeline:create-stage', payload: { pipelineId: selectedLocalFunnel.id, name, color } })
+      .then((stage) => {
+        setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, columns: f.columns.map((c) => c.id === tempId ? { ...c, id: stage.id } : c) }));
+      })
+      .catch(() => setToast('Erro ao salvar etapa no servidor.'));
     setToast('Nova etapa criada.');
   };
 
-  const handleUpdateColumn = ({
-    id,
-    name,
-    color
-  }: {
-    id: string;
-    name: string;
-    color: string;
-  }) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) =>
-        funnel.id === selectedLocalFunnel.id
-          ? {
-              ...funnel,
-              columns: funnel.columns.map((column) => (column.id === id ? { ...column, name, color } : column))
-            }
-          : funnel
-      )
-    );
+  const handleUpdateColumn = ({ id, name, color }: { id: string; name: string; color: string }) => {
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, columns: f.columns.map((c) => c.id === id ? { ...c, name, color } : c) }));
+    void sendMessage({ type: 'pipeline:update-stage', payload: { pipelineId: selectedLocalFunnel.id, stageId: id, name, color } })
+      .catch(() => setToast('Erro ao atualizar etapa no servidor.'));
     setToast('Etapa atualizada.');
   };
 
   const handleDeleteColumn = (columnId: string) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) =>
-        funnel.id === selectedLocalFunnel.id
-          ? {
-              ...funnel,
-              columns: funnel.columns.filter((column) => column.id !== columnId),
-              cards: funnel.cards.filter((card) => card.columnId !== columnId)
-            }
-          : funnel
-      )
-    );
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, columns: f.columns.filter((c) => c.id !== columnId), cards: f.cards.filter((card) => card.columnId !== columnId) }));
+    void sendMessage({ type: 'pipeline:delete-stage', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId } })
+      .catch(() => setToast('Erro ao remover etapa no servidor.'));
     setToast('Etapa removida.');
   };
 
-  const handleAssignConversation = (
-    conversationItem: (typeof conversations)[number],
-    columnId: string
-  ) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previousFunnels) =>
-      previousFunnels.map((funnel) => {
-        if (funnel.id !== selectedLocalFunnel.id) {
-          return funnel;
-        }
-
-        const existing = funnel.cards.find(
-          (card) =>
-            (card.phone && conversationItem.phone && card.phone === conversationItem.phone) ||
-            card.name === conversationItem.name
-        );
-
-        if (existing) {
-          return {
-            ...funnel,
-            cards: funnel.cards.map((card) =>
-              card.id === existing.id
-                ? {
-                    ...card,
-                    columnId,
-                    name: conversationItem.name,
-                    phone: conversationItem.phone,
-                    avatarUrl: conversationItem.avatarUrl
-                  }
-                : card
-            )
-          };
-        }
-
-        return {
-          ...funnel,
-          cards: [
-            ...funnel.cards,
-            {
-              id: `card-${Date.now()}-${conversationItem.id}`,
-              name: conversationItem.name,
-              phone: conversationItem.phone,
-              avatarUrl: conversationItem.avatarUrl,
-              columnId
-            }
-          ]
-        };
+  const handleAssignConversation = (conversationItem: (typeof conversations)[number], columnId: string) => {
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    const tempId = `card-${Date.now()}-${conversationItem.id}`;
+    setFunnels((prev) => prev.map((f) => {
+      if (f.id !== selectedLocalFunnel.id) return f;
+      const existing = f.cards.find((c) => (c.phone && conversationItem.phone && c.phone === conversationItem.phone) || c.name === conversationItem.name);
+      if (existing) {
+        return { ...f, cards: f.cards.map((c) => c.id === existing.id ? { ...c, columnId, name: conversationItem.name, phone: conversationItem.phone, avatarUrl: conversationItem.avatarUrl } : c) };
+      }
+      return { ...f, cards: [...f.cards, { id: tempId, name: conversationItem.name, phone: conversationItem.phone, avatarUrl: conversationItem.avatarUrl, columnId }] };
+    }));
+    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: conversationItem.name, phone: conversationItem.phone } })
+      .then((card) => {
+        setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, cards: f.cards.map((c) => c.id === tempId ? { ...c, id: card.id, leadId: card.leadId } : c) }));
       })
-    );
+      .catch(() => setToast('Erro ao salvar contato no servidor.'));
     setToast('Lead enviado para a etapa.');
   };
 
@@ -667,16 +581,17 @@ export function SidebarApp() {
       return;
     }
 
+    const card = selectedLocalFunnel.cards.find((c) => c.id === cardId);
+    const leadId = card?.leadId ?? cardId;
     setFunnels((previous) =>
       previous.map((funnel) =>
         funnel.id === selectedLocalFunnel.id
-          ? {
-              ...funnel,
-              cards: funnel.cards.map((card) => (card.id === cardId ? { ...card, columnId } : card))
-            }
+          ? { ...funnel, cards: funnel.cards.map((c) => (c.id === cardId ? { ...c, columnId } : c)) }
           : funnel
       )
     );
+    void sendMessage({ type: 'pipeline:move-card', payload: { pipelineId: selectedLocalFunnel.id, leadId, stageId: columnId } })
+      .catch(() => setToast('Erro ao mover card no servidor.'));
     setToast('Card movido no funil.');
   };
 
@@ -718,63 +633,42 @@ export function SidebarApp() {
   };
 
   const handleRemoveCard = (cardId: string) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) =>
-        funnel.id === selectedLocalFunnel.id
-          ? { ...funnel, cards: funnel.cards.filter((card) => card.id !== cardId) }
-          : funnel
-      )
-    );
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    const card = selectedLocalFunnel.cards.find((c) => c.id === cardId);
+    const leadId = card?.leadId ?? cardId;
+    setFunnels((previous) => previous.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, cards: f.cards.filter((c) => c.id !== cardId) }));
+    void sendMessage({ type: 'pipeline:remove-card', payload: { pipelineId: selectedLocalFunnel.id, leadId } })
+      .catch(() => setToast('Erro ao remover card no servidor.'));
     setToast('Contato removido da etapa.');
   };
 
   const handleReorderColumns = (columnId: string, targetColumnId: string) => {
-    if (!selectedLocalFunnel || isCheckoutFunnelSelected) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) => {
-        if (funnel.id !== selectedLocalFunnel.id) {
-          return funnel;
-        }
-
-        const fromIndex = funnel.columns.findIndex((column) => column.id === columnId);
-        const targetIndex = funnel.columns.findIndex((column) => column.id === targetColumnId);
-
-        if (fromIndex === -1 || targetIndex === -1 || fromIndex === targetIndex) {
-          return funnel;
-        }
-
-        const nextColumns = [...funnel.columns];
-        const [movedColumn] = nextColumns.splice(fromIndex, 1);
-        nextColumns.splice(targetIndex, 0, movedColumn);
-        return { ...funnel, columns: nextColumns };
-      })
-    );
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    setFunnels((previous) => previous.map((funnel) => {
+      if (funnel.id !== selectedLocalFunnel.id) return funnel;
+      const fromIndex = funnel.columns.findIndex((c) => c.id === columnId);
+      const targetIndex = funnel.columns.findIndex((c) => c.id === targetColumnId);
+      if (fromIndex === -1 || targetIndex === -1 || fromIndex === targetIndex) return funnel;
+      const nextColumns = [...funnel.columns];
+      const [movedColumn] = nextColumns.splice(fromIndex, 1);
+      nextColumns.splice(targetIndex, 0, movedColumn);
+      return { ...funnel, columns: nextColumns };
+    }));
+    void sendMessage({ type: 'pipeline:reorder-stages', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, targetStageId: targetColumnId } })
+      .catch(() => setToast('Erro ao reordenar etapas no servidor.'));
     setToast('Etapas reorganizadas.');
   };
 
   const handleCreateFunnel = () => {
     const name = window.prompt('Nome do novo funil:', `Novo Funil ${funnels.length + 1}`)?.trim();
-    if (!name) {
-      return;
-    }
-
-    const newFunnel: SavedFunnel = {
-      id: `funnel-${Date.now()}`,
-      name,
-      columns: [],
-      cards: []
-    };
-
-    setFunnels((previous) => [...previous, newFunnel]);
-    setSelectedFunnelId(newFunnel.id);
-    setToast('Novo funil criado.');
+    if (!name) return;
+    void sendMessage<{ id: string; name: string }>({ type: 'pipeline:create', payload: { name } })
+      .then((created) => {
+        setFunnels((previous) => [...previous, { id: created.id, name: created.name, columns: [], cards: [] }]);
+        setSelectedFunnelId(created.id);
+        setToast('Novo funil criado.');
+      })
+      .catch(() => setToast('Erro ao criar funil.'));
   };
 
   const handleConfigureFunnel = () => {
@@ -788,13 +682,10 @@ export function SidebarApp() {
     }
 
     const name = window.prompt('Nome do funil:', selectedLocalFunnel.name)?.trim();
-    if (!name) {
-      return;
-    }
-
-    setFunnels((previous) =>
-      previous.map((funnel) => (funnel.id === selectedLocalFunnel.id ? { ...funnel, name } : funnel))
-    );
+    if (!name) return;
+    setFunnels((previous) => previous.map((f) => (f.id === selectedLocalFunnel.id ? { ...f, name } : f)));
+    void sendMessage({ type: 'pipeline:rename', payload: { id: selectedLocalFunnel.id, name } })
+      .catch(() => setToast('Erro ao renomear funil no servidor.'));
     setToast('Funil atualizado.');
   };
 

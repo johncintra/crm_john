@@ -1,0 +1,48 @@
+version: '3.9'
+
+networks:
+  crm-network:
+    driver: bridge
+
+volumes:
+  crm_postgres_data:
+
+services:
+  crm-postgres:
+    image: postgres:16-alpine
+    container_name: crm-john-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-crm_john}
+      POSTGRES_USER: ${POSTGRES_USER:-crmjohn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - crm_postgres_data:/var/lib/postgresql/data
+    networks:
+      - crm-network
+    ports:
+      - '127.0.0.1:5433:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crmjohn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  crm-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: crm-john-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-crmjohn}:${POSTGRES_PASSWORD}@crm-postgres:5432/${POSTGRES_DB:-crm_john}
+      JWT_SECRET: ${JWT_SECRET}
+      APP_PORT: 3000
+      APP_CORS_ORIGIN: ${CORS_ORIGIN:-https://crm-api.aprovapm.com.br}
+    ports:
+      - '127.0.0.1:3001:3000'
+    networks:
+      - crm-network
+    depends_on:
+      crm-postgres:
+        condition: service_healthy
