@@ -30,8 +30,8 @@ services:
 
   crm-backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: crm-john-backend
     restart: unless-stopped
     environment:

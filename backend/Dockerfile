@@ -1,19 +1,23 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
+COPY backend/package.json ./backend/package.json
+COPY extension/package.json ./extension/package.json
 RUN npm ci
-COPY prisma ./prisma
-RUN npx prisma generate
-COPY . .
-RUN npm run build
+COPY backend/prisma ./backend/prisma
+RUN npm --workspace backend exec -- prisma generate
+COPY backend ./backend
+RUN npm run build:backend
 
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package*.json ./
+COPY backend/package.json ./backend/package.json
+COPY extension/package.json ./extension/package.json
 RUN npm ci --omit=dev
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/backend/node_modules/.prisma ./backend/node_modules/.prisma
+COPY --from=builder /app/backend/dist ./backend/dist
+COPY --from=builder /app/backend/prisma ./backend/prisma
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "cd backend && npx prisma migrate deploy && node dist/main.js"]
