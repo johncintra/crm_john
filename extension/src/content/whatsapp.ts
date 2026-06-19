@@ -851,5 +851,45 @@ export function inspectConversationHeader(): void {
 }
 
 export async function getRealContactPhoneNumber(): Promise<string | null> {
-  return null;
+  const titleEl = document.querySelector<HTMLElement>(
+    '[data-testid="conversation-info-header-chat-title"], [data-testid="conversation-info-header"]'
+  );
+
+  if (!titleEl) {
+    return null;
+  }
+
+  const before = findVisiblePhoneLikeStrings();
+  titleEl.click();
+
+  let phone: string | null = null;
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+
+    const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
+    if (!panel) {
+      continue;
+    }
+
+    const direct = extractPhoneFromText(panel.textContent ?? '');
+    if (direct) {
+      phone = direct;
+      break;
+    }
+
+    const after = findVisiblePhoneLikeStrings();
+    const newPhones = [...after].filter((candidate) => !before.has(candidate));
+    if (newPhones.length) {
+      phone = newPhones[0];
+      break;
+    }
+  }
+
+  // Close the drawer again so we don't leave the seller's UI in a
+  // different state than they had it.
+  titleEl.click();
+
+  console.log('[CRM John] getRealContactPhoneNumber resultado:', phone);
+  return phone;
 }
