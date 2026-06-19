@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutPanelTop, ListTodo, MessageSquareText } from 'lucide-react';
+import { LayoutPanelTop, ListTodo, MessageSquareText, UserCircle2 } from 'lucide-react';
 import { demoLeadContext } from './demo-data';
 import { useBackground } from './hooks/useBackground';
 import { useWhatsAppConversation } from './hooks/useWhatsAppConversation';
@@ -862,6 +862,14 @@ export function SidebarApp() {
       ) : null}
 
       <div className={`crm-right-rail-icons ${workspaceView === 'general' ? 'is-hidden' : ''}`}>
+        <button
+          type="button"
+          onClick={() => toggleRailPanel('account')}
+          className={`crm-right-rail-icon ${railPanel === 'account' && isRailOpen ? 'is-active' : ''}`}
+          title="Minha Conta"
+        >
+          <UserCircle2 className="crm-h-5 crm-w-5" />
+        </button>
         <button
           type="button"
           onClick={() => toggleRailPanel('templates')}

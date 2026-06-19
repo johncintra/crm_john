@@ -88,12 +88,12 @@ export async function ensureWorkspaceDefaultCrmSetup(db: DbClient, workspaceId: 
 }
 
 async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineSeed) {
-  let pipeline = await db.pipeline.findFirst({
-    where: {
-      workspaceId,
-      name: seed.name
-    }
-  });
+  // Match by role (isDefault/isCheckout), not by name: the user can freely
+  // rename the pipeline via the UI, and matching by name would otherwise
+  // create a brand new duplicate the next time this runs.
+  let pipeline = seed.isCheckout
+    ? await db.pipeline.findFirst({ where: { workspaceId, isCheckout: true } })
+    : await db.pipeline.findFirst({ where: { workspaceId, isDefault: true, isCheckout: false } });
 
   if (!pipeline) {
     pipeline = await db.pipeline.create({
@@ -117,11 +117,6 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
         }
       });
     }
-  } else if (pipeline.isDefault !== seed.isDefault) {
-    pipeline = await db.pipeline.update({
-      where: { id: pipeline.id },
-      data: { isDefault: seed.isDefault, isCheckout: seed.isCheckout ?? false }
-    });
   }
 
   return db.pipeline.findUniqueOrThrow({
