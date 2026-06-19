@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
+import { SyncMessageItemDto } from './dto/sync-messages.dto';
 
 const EVENT_TYPE_MAP: Record<LeadEventType, string> = {
   CHECKOUT_EVENT: 'checkout_event',
@@ -182,6 +183,46 @@ export class CrmService {
     ]);
 
     return { ok: true };
+  }
+
+  async syncLeadMessages(userId: string, leadId: string, messages: SyncMessageItemDto[]) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+
+    if (!messages.length) {
+      return { ok: true, synced: 0 };
+    }
+
+    const result = await this.prisma.leadMessage.createMany({
+      data: messages.map((message) => ({
+        leadId,
+        direction: message.direction,
+        content: message.content,
+        sentAt: new Date(message.sentAt),
+        externalId: message.externalId ?? null
+      })),
+      skipDuplicates: true
+    });
+
+    return { ok: true, synced: result.count };
+  }
+
+  async getLeadMessages(userId: string, leadId: string, sinceHours: number) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+
+    const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
+    const messages = await this.prisma.leadMessage.findMany({
+      where: { leadId, sentAt: { gte: since } },
+      orderBy: { sentAt: 'asc' }
+    });
+
+    return messages.map((message) => ({
+      id: message.id,
+      direction: message.direction,
+      content: message.content,
+      sentAt: message.sentAt.toISOString()
+    }));
   }
 
   async updateTaskStatus(userId: string, taskId: string, status: TaskStatus) {

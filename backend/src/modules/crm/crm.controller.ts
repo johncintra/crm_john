@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards
 } from '@nestjs/common';
 import { CheckoutProvider } from '@prisma/client';
@@ -28,6 +29,7 @@ import { StageUpdateDto } from './dto/stage-update.dto';
 import { StagesReorderDto } from './dto/stages-reorder.dto';
 import { CardAssignDto } from './dto/card-assign.dto';
 import { CardMoveDto } from './dto/card-move.dto';
+import { SyncMessagesDto } from './dto/sync-messages.dto';
 
 @Controller()
 export class CrmController {
@@ -81,6 +83,27 @@ export class CrmController {
     @Body() dto: CreateTaskDto
   ) {
     return this.crmService.createLeadTask(user.sub, leadId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('leads/:leadId/messages')
+  getLeadMessages(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Query('hours') hours?: string
+  ) {
+    const sinceHours = Number(hours) > 0 ? Number(hours) : 24;
+    return this.crmService.getLeadMessages(user.sub, leadId, sinceHours);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('leads/:leadId/messages/sync')
+  syncLeadMessages(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: SyncMessagesDto
+  ) {
+    return this.crmService.syncLeadMessages(user.sub, leadId, dto.messages);
   }
 
   @UseGuards(JwtAuthGuard)

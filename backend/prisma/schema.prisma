@@ -33,6 +33,11 @@ enum TaskStatus {
   CANCELED
 }
 
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
 enum TemplateCategory {
   PIX_PENDING
   CREDIT_CARD_DECLINED
@@ -147,6 +152,7 @@ model Lead {
   notes           LeadNote[]
   tasks           LeadTask[]
   timeline        LeadTimelineEvent[]
+  messages        LeadMessage[]
   orders          Order[]
   checkoutEvents  CheckoutEvent[]
   createdAt       DateTime           @default(now())
@@ -223,6 +229,20 @@ model LeadTimelineEvent {
   createdAt   DateTime      @default(now())
 
   @@index([leadId, createdAt])
+}
+
+model LeadMessage {
+  id         String           @id @default(cuid())
+  leadId     String
+  direction  MessageDirection
+  content    String
+  sentAt     DateTime
+  externalId String?
+  lead       Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now())
+
+  @@unique([leadId, externalId])
+  @@index([leadId, sentAt])
 }
 
 model Order {
