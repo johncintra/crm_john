@@ -767,7 +767,14 @@ export class CrmService {
         (await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } }))
       : await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } });
     if (lead) {
-      lead = await this.prisma.lead.update({ where: { id: lead.id }, data: { currentStageId: stageId, name: contact.name } });
+      lead = await this.prisma.lead.update({
+        where: { id: lead.id },
+        data: {
+          currentStageId: stageId,
+          name: contact.name,
+          ...(normalizedPhone ? { phone: contact.phone, normalizedPhone } : {})
+        }
+      });
     } else {
       lead = await this.prisma.lead.create({
         data: { workspaceId, pipelineId, name: contact.name, phone: contact.phone, normalizedPhone, currentStageId: stageId }
