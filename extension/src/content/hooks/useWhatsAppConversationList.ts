@@ -7,8 +7,36 @@ import {
   type WhatsAppConversationItem
 } from '../whatsapp';
 
-let cachedConversationItems: WhatsAppConversationItem[] = [];
-let hasScannedAllConversations = false;
+// Opening a brand-new contact's chat on a different WhatsApp number requires
+// a full page reload (see forceOpenConversationByPhoneNumber), which wipes
+// these module-level variables. Without persisting them, every reload makes
+// "Últimas Conversas" re-scan from scratch, adding several extra seconds on
+// top of the reload itself. sessionStorage survives a reload (cleared only
+// when the tab closes), so stash the cache there too.
+const SESSION_STORAGE_KEY = 'crm-john-cached-conversations';
+const SESSION_STORAGE_SCANNED_KEY = 'crm-john-has-scanned-all-conversations';
+
+function readSessionCache(): WhatsAppConversationItem[] {
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as WhatsAppConversationItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeSessionCache(items: WhatsAppConversationItem[], scannedAll: boolean): void {
+  try {
+    window.sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(items));
+    window.sessionStorage.setItem(SESSION_STORAGE_SCANNED_KEY, scannedAll ? '1' : '0');
+  } catch {
+    // sessionStorage can throw in rare cases (quota, privacy mode) — caching
+    // is a pure performance optimization, safe to skip silently.
+  }
+}
+
+let cachedConversationItems: WhatsAppConversationItem[] = readSessionCache();
+let hasScannedAllConversations = cachedConversationItems.length > 0 && window.sessionStorage.getItem(SESSION_STORAGE_SCANNED_KEY) === '1';
 let hasRequestedAllConversationsScan = false;
 let allConversationsScanPromise: Promise<WhatsAppConversationItem[]> | null = null;
 
@@ -63,6 +91,7 @@ export function useWhatsAppConversationList(
         }
 
         cachedConversationItems = merged;
+        writeSessionCache(merged, hasScannedAllConversations);
         return merged;
       });
     };
@@ -117,6 +146,7 @@ export function useWhatsAppConversationList(
 
       hasScannedAllConversations = true;
       cachedConversationItems = next;
+      writeSessionCache(next, true);
       setItems((previous) => {
         const prevSerialized = JSON.stringify(previous);
         const nextSerialized = JSON.stringify(next);
