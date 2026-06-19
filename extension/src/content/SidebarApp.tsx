@@ -546,7 +546,12 @@ export function SidebarApp() {
 
     let opened = await openConversationInWhatsApp(finalPhone ?? '', finalName);
 
-    if (!opened && finalPhone) {
+    // openConversationByPhoneNumber's soft navigation only has a real
+    // chance of being picked up when this account already has some trace
+    // of the contact (conversationMatch) — for a genuinely new contact it
+    // reliably fails after ~3s of retries, just delaying the fallback
+    // below. Skip straight to the reliable path in that case.
+    if (!opened && finalPhone && conversationMatch) {
       opened = await openConversationByPhoneNumber(finalPhone);
       if (opened) {
         setToast('Abrindo conversa por numero.');
