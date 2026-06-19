@@ -9,8 +9,13 @@ docker-compose -f docker-compose.prod.yml --env-file .env.production build crm-b
 
 echo "==> Recriando container do backend..."
 # docker-compose v1 quebra recriando containers em hosts com Docker Engine
-# recente (KeyError: 'ContainerConfig'); remover antes evita o bug.
-docker rm -f crm-john-backend > /dev/null 2>&1 || true
+# recente (KeyError: 'ContainerConfig'); remover antes evita o bug. Usa
+# filtro por nome (não nome exato) porque uma tentativa fracassada de
+# recreate pode deixar um container renomeado com prefixo de hash.
+OLD_BACKEND_IDS=$(docker ps -a --filter 'name=crm-john-backend' --format '{{.ID}}')
+if [ -n "$OLD_BACKEND_IDS" ]; then
+  docker rm -f $OLD_BACKEND_IDS > /dev/null 2>&1 || true
+fi
 docker-compose -f docker-compose.prod.yml --env-file .env.production up -d
 
 echo "==> Aguardando backend iniciar..."
