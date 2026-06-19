@@ -104,77 +104,23 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
         isCheckout: seed.isCheckout ?? false
       }
     });
+
+    // Seed default stages only at pipeline creation time. Doing this on every
+    // call would resurrect stages the user deliberately deleted later.
+    for (const stage of seed.stages) {
+      await db.pipelineStage.create({
+        data: {
+          pipelineId: pipeline.id,
+          name: stage.name,
+          color: stage.color,
+          position: stage.position
+        }
+      });
+    }
   } else if (pipeline.isDefault !== seed.isDefault) {
     pipeline = await db.pipeline.update({
       where: { id: pipeline.id },
       data: { isDefault: seed.isDefault, isCheckout: seed.isCheckout ?? false }
-    });
-  }
-
-  const existingStages = await db.pipelineStage.findMany({
-    where: { pipelineId: pipeline.id },
-    orderBy: { position: 'asc' }
-  });
-
-  const maxExistingPosition = existingStages.reduce(
-    (highest, stage) => Math.max(highest, stage.position),
-    0
-  );
-
-  for (const [index, stage] of seed.stages.entries()) {
-    const existingStage = existingStages.find((currentStage) => currentStage.name === stage.name);
-
-    if (existingStage) {
-      await db.pipelineStage.update({
-        where: { id: existingStage.id },
-        data: {
-          color: stage.color
-        }
-      });
-      continue;
-    }
-
-    await db.pipelineStage.create({
-      data: {
-        pipelineId: pipeline.id,
-        name: stage.name,
-        color: stage.color,
-        position: maxExistingPosition + index + 1
-      }
-    });
-  }
-
-  const refreshedStages = await db.pipelineStage.findMany({
-    where: { pipelineId: pipeline.id }
-  });
-
-  for (const [index, stage] of seed.stages.entries()) {
-    const currentStage = refreshedStages.find((item) => item.name === stage.name);
-    if (!currentStage) {
-      continue;
-    }
-
-    await db.pipelineStage.update({
-      where: { id: currentStage.id },
-      data: {
-        color: stage.color,
-        position: 1000 + index
-      }
-    });
-  }
-
-  for (const stage of seed.stages) {
-    const currentStage = refreshedStages.find((item) => item.name === stage.name);
-    if (!currentStage) {
-      continue;
-    }
-
-    await db.pipelineStage.update({
-      where: { id: currentStage.id },
-      data: {
-        color: stage.color,
-        position: stage.position
-      }
     });
   }
 
