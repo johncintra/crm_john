@@ -816,22 +816,54 @@ export function getOpenConversationMessages(sinceMs: number): ScrapedMessage[] {
   return messages;
 }
 
-// WhatsApp Web tags message rows with a data-id like
-// "true_5511999999999@c.us_<messageId>" (the JID of the chat). Reading it
-// is passive — no clicking/waiting/opening side panels required — and
-// works even for named/saved contacts that never show their number as
-// visible text anywhere in the chat list or header.
-const JID_PHONE_PATTERN = /(\d{6,15})@(?:c\.us|s\.whatsapp\.net)/;
+function findVisiblePhoneLikeStrings(): Set<string> {
+  const text = document.body.innerText || '';
+  const matches = text.match(/\+?\d[\d\s\-().]{7,}\d/g) ?? [];
+  const result = new Set<string>();
 
-export function getRealContactPhoneNumber(): string | null {
-  const nodes = document.querySelectorAll<HTMLElement>('#main [data-id]');
-  console.log('[CRM John] data-id nodes encontrados em #main:', nodes.length, Array.from(nodes).slice(0, 5).map((n) => n.getAttribute('data-id')));
+  for (const match of matches) {
+    const normalized = normalizePhone(match);
+    if (normalized.length >= 10 && normalized.length <= 15) {
+      result.add(normalized);
+    }
+  }
 
-  for (const node of nodes) {
-    const dataId = node.getAttribute('data-id') ?? '';
-    const match = dataId.match(JID_PHONE_PATTERN);
-    if (match) {
-      return match[1];
+  return result;
+}
+
+// WhatsApp's contact info panel always shows the real phone number as
+// visible text, even for named/saved contacts (unlike the chat list, which
+// never exposes it). We don't know exactly which element opens that panel
+// across WhatsApp Web versions, so we try a few candidates and diff the
+// page's visible phone-like strings before/after each click — whichever
+// click reveals a brand new number is almost certainly the contact's real
+// phone, regardless of the exact DOM structure.
+const HEADER_CLICK_CANDIDATES = [
+  '#main header img',
+  '#main header [title]',
+  '#main header span[dir="auto"]',
+  '#main header'
+];
+
+export async function getRealContactPhoneNumber(): Promise<string | null> {
+  const before = findVisiblePhoneLikeStrings();
+
+  for (const selector of HEADER_CLICK_CANDIDATES) {
+    const target = document.querySelector<HTMLElement>(selector);
+    if (!target) {
+      continue;
+    }
+
+    target.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 700));
+
+    const after = findVisiblePhoneLikeStrings();
+    const newPhones = [...after].filter((phone) => !before.has(phone));
+    console.log('[CRM John] clique em', selector, '-> telefones novos no texto da pagina:', newPhones);
+
+    if (newPhones.length) {
+      target.click();
+      return newPhones[0];
     }
   }
 

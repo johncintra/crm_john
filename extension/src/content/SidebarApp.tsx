@@ -288,20 +288,6 @@ export function SidebarApp() {
     void refreshLeadContext();
   }, [refreshLeadContext, isAuthenticated]);
 
-  // Capture the real phone number for the open conversation's lead, if we
-  // don't already have one — needed so "Mensagem" can reach this contact
-  // again from a different WhatsApp number later.
-  useEffect(() => {
-    if (!isAuthenticated || !context?.lead?.id || context.lead.phone) return;
-    const leadId = context.lead.id;
-
-    const phone = getRealContactPhoneNumber();
-    console.log('[CRM John] captura de telefone (contexto ativo):', phone);
-    if (phone) {
-      void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone } }).catch(() => {});
-    }
-  }, [context?.lead?.id, context?.lead?.phone, isAuthenticated, sendMessage]);
-
   // While a conversation tied to a known lead is open, periodically scrape
   // the visible messages and sync the last 24h to the backend, so the
   // conversation can be recovered from a different WhatsApp number later.
@@ -554,8 +540,7 @@ export function SidebarApp() {
     }
 
     if (opened && leadId && !phone) {
-      window.setTimeout(() => {
-        const capturedPhone = getRealContactPhoneNumber();
+      void getRealContactPhoneNumber().then((capturedPhone) => {
         console.log('[CRM John] captura de telefone (apos abrir conversa):', capturedPhone, 'leadId:', leadId);
         if (!capturedPhone) {
           setToast('Nao consegui capturar o telefone real (veja o console).');
@@ -563,7 +548,7 @@ export function SidebarApp() {
         }
         setToast(`Telefone capturado: ${capturedPhone}`);
         void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone: capturedPhone } }).catch(() => {});
-      }, 600);
+      });
     }
 
     if (opened && leadId) {
