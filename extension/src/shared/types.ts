@@ -155,6 +155,7 @@ export interface RemotePipelineBoard {
     name: string;
     email?: string | null;
     phone?: string | null;
+    normalizedPhone?: string | null;
     avatarUrl: null;
     columnId: string | null;
     source?: string | null;

@@ -698,6 +698,7 @@ export class CrmService {
           name: lead.name,
           email: lead.email,
           phone: lead.phone,
+          normalizedPhone: lead.normalizedPhone,
           avatarUrl: null,
           columnId: lead.currentStageId,
           source: lead.source,
@@ -762,7 +763,8 @@ export class CrmService {
     await this.requirePipeline(workspaceId, pipelineId);
     const normalizedPhone = this.normalizePhone(contact.phone);
     let lead = normalizedPhone
-      ? await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, normalizedPhone } })
+      ? (await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, normalizedPhone } })) ??
+        (await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } }))
       : await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } });
     if (lead) {
       lead = await this.prisma.lead.update({ where: { id: lead.id }, data: { currentStageId: stageId, name: contact.name } });

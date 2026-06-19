@@ -94,6 +94,7 @@ export function SidebarApp() {
       name: card.name,
       email: card.email ?? null,
       phone: card.phone ?? card.normalizedPhone ?? null,
+      normalizedPhone: card.normalizedPhone ?? null,
       avatarUrl: null,
       columnId: card.columnId ?? fallbackColumnId,
       source: card.source,
@@ -363,12 +364,12 @@ export function SidebarApp() {
 
   const loadFunnelBoard = useCallback(async (pipelineId: string) => {
     try {
-      const board = await sendMessage<{ funnel: { id: string; name: string }; columns: Array<{ id: string; name: string; color: string }>; cards: Array<{ id: string; leadId: string; name: string; email?: string | null; phone?: string | null; avatarUrl: null; columnId: string | null; source?: string | null; temperature?: string | null; tags: Array<{ id: string; name: string; color?: string | null }>; latestOrder: unknown }> }>({ type: 'pipeline:fetch-board', payload: { id: pipelineId } });
+      const board = await sendMessage<{ funnel: { id: string; name: string }; columns: Array<{ id: string; name: string; color: string }>; cards: Array<{ id: string; leadId: string; name: string; email?: string | null; phone?: string | null; normalizedPhone?: string | null; avatarUrl: null; columnId: string | null; source?: string | null; temperature?: string | null; tags: Array<{ id: string; name: string; color?: string | null }>; latestOrder: unknown }> }>({ type: 'pipeline:fetch-board', payload: { id: pipelineId } });
       setFunnels((prev) => prev.map((f) => f.id !== pipelineId ? f : {
         ...f,
         name: board.funnel.name,
         columns: board.columns.map((c) => ({ id: c.id, name: c.name, color: c.color })),
-        cards: board.cards.map((c) => ({ id: c.id, leadId: c.leadId, name: c.name, email: c.email ?? null, phone: c.phone ?? null, avatarUrl: null, columnId: c.columnId ?? f.columns[0]?.id ?? '', source: c.source ?? null, temperature: c.temperature ?? null, tags: c.tags, latestOrder: c.latestOrder as FunnelCard['latestOrder'] }))
+        cards: board.cards.map((c) => ({ id: c.id, leadId: c.leadId, name: c.name, email: c.email ?? null, phone: c.phone ?? c.normalizedPhone ?? null, normalizedPhone: c.normalizedPhone ?? null, avatarUrl: null, columnId: c.columnId ?? f.columns[0]?.id ?? '', source: c.source ?? null, temperature: c.temperature ?? null, tags: c.tags, latestOrder: c.latestOrder as FunnelCard['latestOrder'] }))
       }));
     } catch { /* keep existing state on error */ }
   }, [sendMessage]);
@@ -480,14 +481,16 @@ export function SidebarApp() {
 
   const handleOpenConversation = async ({
     phone,
+    normalizedPhone,
     name,
     leadId
   }: {
     name: string;
     phone: string | null;
+    normalizedPhone?: string | null;
     leadId?: string;
   }) => {
-    const normalizedCardPhone = phone ? normalizePhone(phone) : null;
+    const normalizedCardPhone = phone ? normalizePhone(phone) : normalizedPhone ? normalizePhone(normalizedPhone) : null;
     const normalizedCardName = name.trim().toLowerCase();
     const matchedConversation =
       (normalizedCardPhone
@@ -505,7 +508,7 @@ export function SidebarApp() {
       null;
 
     let conversationMatch = matchedConversation;
-    const resolvedPhone = phone ?? matchedConversation?.phone ?? null;
+    const resolvedPhone = phone ?? normalizedPhone ?? matchedConversation?.phone ?? null;
 
     if (resolvedPhone && !conversationMatch) {
       const allConversations = await getAllWhatsAppConversationList();
@@ -636,20 +639,36 @@ export function SidebarApp() {
     setToast('Etapa removida.');
   };
 
-  const handleAssignConversation = (conversationItem: (typeof conversations)[number], columnId: string) => {
+  const handleAssignConversation = async (conversationItem: (typeof conversations)[number], columnId: string) => {
     if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
     const tempId = `card-${Date.now()}-${conversationItem.id}`;
+    let phone = conversationItem.phone;
+
+    if (!phone && currentConversationListItem?.id === conversationItem.id) {
+      phone = await getRealContactPhoneNumber();
+      if (phone) {
+        setToast(`Telefone capturado: ${phone}`);
+      }
+    }
+
     setFunnels((prev) => prev.map((f) => {
       if (f.id !== selectedLocalFunnel.id) return f;
-      const existing = f.cards.find((c) => (c.phone && conversationItem.phone && c.phone === conversationItem.phone) || c.name === conversationItem.name);
+      const existing = f.cards.find((c) => (c.phone && phone && normalizePhone(c.phone) === normalizePhone(phone)) || c.name === conversationItem.name);
       if (existing) {
-        return { ...f, cards: f.cards.map((c) => c.id === existing.id ? { ...c, columnId, name: conversationItem.name, phone: conversationItem.phone, avatarUrl: conversationItem.avatarUrl } : c) };
+        return { ...f, cards: f.cards.map((c) => c.id === existing.id ? { ...c, columnId, name: conversationItem.name, phone, normalizedPhone: phone ? normalizePhone(phone) : c.normalizedPhone, avatarUrl: conversationItem.avatarUrl } : c) };
       }
-      return { ...f, cards: [...f.cards, { id: tempId, name: conversationItem.name, phone: conversationItem.phone, avatarUrl: conversationItem.avatarUrl, columnId }] };
+      return { ...f, cards: [...f.cards, { id: tempId, name: conversationItem.name, phone, normalizedPhone: phone ? normalizePhone(phone) : null, avatarUrl: conversationItem.avatarUrl, columnId }] };
     }));
-    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: conversationItem.name, phone: conversationItem.phone } })
+    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: conversationItem.name, phone } })
       .then((card) => {
-        setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, cards: f.cards.map((c) => c.id === tempId ? { ...c, id: card.id, leadId: card.leadId } : c) }));
+        setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : {
+          ...f,
+          cards: f.cards.map((c) =>
+            c.id === tempId || c.name === conversationItem.name
+              ? { ...c, id: card.id, leadId: card.leadId }
+              : c
+          )
+        }));
       })
       .catch(() => setToast('Erro ao salvar contato no servidor.'));
     setToast('Lead enviado para a etapa.');
@@ -696,7 +715,7 @@ export function SidebarApp() {
     setToast('Card movido no funil.');
   };
 
-  const handleMoveCurrentConversationToColumn = (columnId: string) => {
+  const handleMoveCurrentConversationToColumn = async (columnId: string) => {
     if (isCheckoutFunnelSelected) {
       const leadId = context?.lead?.id ?? activeConversationCard?.leadId;
       if (!leadId) {
@@ -713,6 +732,32 @@ export function SidebarApp() {
     }
 
     if (activeConversationCard) {
+      if (!activeConversationCard.phone && activeConversationCard.leadId) {
+        const capturedPhone = await getRealContactPhoneNumber();
+        if (capturedPhone) {
+          const normalizedCapturedPhone = normalizePhone(capturedPhone);
+          setFunnels((previous) =>
+            previous.map((funnel) =>
+              funnel.id === selectedLocalFunnel.id
+                ? {
+                    ...funnel,
+                    cards: funnel.cards.map((card) =>
+                      card.id === activeConversationCard.id
+                        ? { ...card, phone: capturedPhone, normalizedPhone: normalizedCapturedPhone }
+                        : card
+                    )
+                  }
+                : funnel
+            )
+          );
+          void sendMessage({
+            type: 'lead:update-phone',
+            payload: { leadId: activeConversationCard.leadId, phone: capturedPhone }
+          }).catch(() => {});
+          setToast(`Telefone capturado: ${capturedPhone}`);
+        }
+      }
+
       void handleMoveCard(activeConversationCard.id, columnId);
       return;
     }
