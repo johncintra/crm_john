@@ -825,6 +825,7 @@ const JID_PHONE_PATTERN = /(\d{6,15})@(?:c\.us|s\.whatsapp\.net)/;
 
 export function getRealContactPhoneNumber(): string | null {
   const nodes = document.querySelectorAll<HTMLElement>('#main [data-id]');
+  console.log('[CRM John] data-id nodes encontrados em #main:', nodes.length, Array.from(nodes).slice(0, 5).map((n) => n.getAttribute('data-id')));
 
   for (const node of nodes) {
     const dataId = node.getAttribute('data-id') ?? '';

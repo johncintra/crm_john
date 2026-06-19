@@ -296,6 +296,7 @@ export function SidebarApp() {
     const leadId = context.lead.id;
 
     const phone = getRealContactPhoneNumber();
+    console.log('[CRM John] captura de telefone (contexto ativo):', phone);
     if (phone) {
       void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone } }).catch(() => {});
     }
@@ -555,9 +556,14 @@ export function SidebarApp() {
     if (opened && leadId && !phone) {
       window.setTimeout(() => {
         const capturedPhone = getRealContactPhoneNumber();
-        if (!capturedPhone) return;
+        console.log('[CRM John] captura de telefone (apos abrir conversa):', capturedPhone, 'leadId:', leadId);
+        if (!capturedPhone) {
+          setToast('Nao consegui capturar o telefone real (veja o console).');
+          return;
+        }
+        setToast(`Telefone capturado: ${capturedPhone}`);
         void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone: capturedPhone } }).catch(() => {});
-      }, 500);
+      }, 600);
     }
 
     if (opened && leadId) {
