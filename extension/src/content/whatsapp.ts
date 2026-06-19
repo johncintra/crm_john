@@ -870,8 +870,17 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
     return null;
   }
 
-  const wasAlreadyOpen = !!document.querySelector('[data-testid="drawer-right"]');
-  console.log('[CRM John] getRealContactPhoneNumber: painel ja estava aberto?', wasAlreadyOpen);
+  // The drawer-right container apparently stays mounted in the DOM even
+  // when closed (just empty), so element existence alone doesn't tell us
+  // whether it's actually showing content — check for real text instead.
+  const existingPanel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
+  const wasAlreadyOpen = !!existingPanel && (existingPanel.textContent ?? '').trim().length > 20;
+  console.log(
+    '[CRM John] getRealContactPhoneNumber: painel existe?',
+    !!existingPanel,
+    '| tem conteudo (considerado aberto)?',
+    wasAlreadyOpen
+  );
 
   const before = findVisiblePhoneLikeStrings();
 
