@@ -762,3 +762,89 @@ export function forceOpenConversationByPhoneNumber(phone: string): boolean {
   window.location.assign(`${nextUrl.pathname}${nextUrl.search}`);
   return true;
 }
+
+export interface ScrapedMessage {
+  direction: 'INBOUND' | 'OUTBOUND';
+  content: string;
+  sentAt: string;
+  externalId: string;
+}
+
+const MESSAGE_TIMESTAMP_PATTERN = /\[(\d{1,2}:\d{2}),\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})\]/;
+
+function parseWhatsAppMessageTimestamp(preText: string): Date | null {
+  const match = preText.match(MESSAGE_TIMESTAMP_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  const [, time, day, month, yearRaw] = match;
+  const [hours, minutes] = time.split(':').map(Number);
+  const year = yearRaw.length === 2 ? 2000 + Number(yearRaw) : Number(yearRaw);
+  const date = new Date(year, Number(month) - 1, Number(day), hours, minutes, 0, 0);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export function getOpenConversationMessages(sinceMs: number): ScrapedMessage[] {
+  const nodes = document.querySelectorAll<HTMLElement>('[data-pre-plain-text]');
+  const messages: ScrapedMessage[] = [];
+
+  nodes.forEach((node) => {
+    const preText = node.getAttribute('data-pre-plain-text') ?? '';
+    const sentAt = parseWhatsAppMessageTimestamp(preText);
+    if (!sentAt || sentAt.getTime() < sinceMs) {
+      return;
+    }
+
+    const bubble = node.closest('[class*="message-out"], [class*="message-in"]');
+    const direction = bubble?.className.includes('message-out') ? 'OUTBOUND' : 'INBOUND';
+
+    const textNode = node.querySelector('span.selectable-text, span[dir="ltr"], span[dir="auto"]');
+    const content = (textNode?.textContent ?? node.textContent ?? '').trim();
+    if (!content) {
+      return;
+    }
+
+    const externalId = `${sentAt.getTime()}-${direction}-${content.slice(0, 60)}`;
+    messages.push({ direction, content, sentAt: sentAt.toISOString(), externalId });
+  });
+
+  return messages;
+}
+
+const CONTACT_INFO_PANEL_SELECTORS = [
+  '[data-testid="drawer-right"]',
+  '#app aside[data-testid]',
+  'div[role="dialog"]'
+];
+
+export async function getRealContactPhoneNumber(): Promise<string | null> {
+  const header = document.querySelector<HTMLElement>(
+    '#main header [title], #main header span[dir="auto"], #main header'
+  );
+
+  if (!header) {
+    return null;
+  }
+
+  header.click();
+  await new Promise((resolve) => window.setTimeout(resolve, 400));
+
+  let phone: string | null = null;
+  for (const selector of CONTACT_INFO_PANEL_SELECTORS) {
+    const panel = document.querySelector<HTMLElement>(selector);
+    if (!panel) {
+      continue;
+    }
+
+    const candidate = extractPhoneFromText(panel.textContent ?? '');
+    if (candidate) {
+      phone = candidate;
+      break;
+    }
+  }
+
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
+
+  return phone;
+}

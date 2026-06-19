@@ -9,18 +9,21 @@ import {
   getAllWhatsAppConversationList,
   forceOpenConversationByPhoneNumber,
   getCurrentConversationAvatar,
+  getOpenConversationMessages,
+  getRealContactPhoneNumber,
   getSelectedConversationFromList,
   insertTextIntoWhatsAppComposer,
   openConversationByPhoneNumber,
   openConversationInWhatsApp
 } from './whatsapp';
-import type { AuthSession, CheckoutBoardData, LeadContext, MessageTemplate } from '../shared/types';
+import type { AuthSession, CheckoutBoardData, LeadContext, MessageTemplate, RemoteLeadMessage } from '../shared/types';
 import {
   FunnelBoard,
   type FunnelCard,
   type FunnelColumn
 } from './components/FunnelBoard';
 import { LoginScreen } from './components/LoginScreen';
+import { MessageHistoryPanel } from './components/MessageHistoryPanel';
 
 type WorkspaceView = 'general' | 'funnel';
 type RailPanel = 'account' | 'templates' | 'lists' | 'calendar';
@@ -60,6 +63,8 @@ export function SidebarApp() {
   const [funnelsLoaded, setFunnelsLoaded] = useState(false);
   const [checkoutBoard, setCheckoutBoard] = useState<CheckoutBoardData | null>(null);
   const [workspaceTemplates, setWorkspaceTemplates] = useState<MessageTemplate[]>([]);
+  const [messageHistory, setMessageHistory] = useState<RemoteLeadMessage[] | null>(null);
+  const [messageHistoryLeadName, setMessageHistoryLeadName] = useState('');
   const isCheckoutFunnelSelected = selectedFunnelId === CHECKOUT_FUNNEL_ID;
   const conversations = useWhatsAppConversationList({
     scanAll: workspaceView === 'general' && !isCheckoutFunnelSelected
@@ -283,6 +288,38 @@ export function SidebarApp() {
     void refreshLeadContext();
   }, [refreshLeadContext, isAuthenticated]);
 
+  // Capture the real phone number for the open conversation's lead, if we
+  // don't already have one — needed so "Mensagem" can reach this contact
+  // again from a different WhatsApp number later.
+  useEffect(() => {
+    if (!isAuthenticated || !context?.lead?.id || context.lead.phone) return;
+    const leadId = context.lead.id;
+
+    void getRealContactPhoneNumber().then((phone) => {
+      if (!phone) return;
+      void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone } }).catch(() => {});
+    });
+  }, [context?.lead?.id, context?.lead?.phone, isAuthenticated, sendMessage]);
+
+  // While a conversation tied to a known lead is open, periodically scrape
+  // the visible messages and sync the last 24h to the backend, so the
+  // conversation can be recovered from a different WhatsApp number later.
+  useEffect(() => {
+    if (!isAuthenticated || !context?.lead?.id) return;
+    const leadId = context.lead.id;
+    const sinceMs = Date.now() - 24 * 60 * 60 * 1000;
+
+    const sync = () => {
+      const messages = getOpenConversationMessages(sinceMs);
+      if (!messages.length) return;
+      void sendMessage({ type: 'lead:sync-messages', payload: { leadId, messages } }).catch(() => {});
+    };
+
+    sync();
+    const interval = window.setInterval(sync, 10000);
+    return () => window.clearInterval(interval);
+  }, [context?.lead?.id, isAuthenticated, sendMessage]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
     void loadCheckoutBoard();
@@ -455,11 +492,22 @@ export function SidebarApp() {
 
   const handleOpenConversation = async ({
     phone,
-    name
+    name,
+    leadId
   }: {
     name: string;
     phone: string | null;
+    leadId?: string;
   }) => {
+    if (leadId) {
+      void sendMessage<RemoteLeadMessage[]>({ type: 'lead:fetch-messages', payload: { leadId, hours: 24 } })
+        .then((history) => {
+          setMessageHistoryLeadName(name);
+          setMessageHistory(history);
+        })
+        .catch(() => {});
+    }
+
     const normalizedCardPhone = phone ? normalizePhone(phone) : null;
     const normalizedCardName = name.trim().toLowerCase();
     const matchedConversation =
@@ -480,7 +528,7 @@ export function SidebarApp() {
     let conversationMatch = matchedConversation;
     const resolvedPhone = phone ?? matchedConversation?.phone ?? null;
 
-    if (isCheckoutFunnelSelected && resolvedPhone && !conversationMatch) {
+    if (resolvedPhone && !conversationMatch) {
       const allConversations = await getAllWhatsAppConversationList();
       conversationMatch =
         allConversations.find(
@@ -505,7 +553,10 @@ export function SidebarApp() {
       return;
     }
 
-    if (isCheckoutFunnelSelected && finalPhone && !conversationMatch) {
+    // Real phone known but no match in this WhatsApp account's own chat
+    // list/search (e.g. the seller switched to a different number) — open a
+    // brand new chat by phone via WhatsApp's universal deep link.
+    if (finalPhone && !conversationMatch) {
       if (forceOpenConversationByPhoneNumber(finalPhone)) {
         setWorkspaceView('funnel');
         return;
@@ -964,6 +1015,14 @@ export function SidebarApp() {
           ) : null}
         </div>
       </aside>
+
+      {messageHistory !== null ? (
+        <MessageHistoryPanel
+          leadName={messageHistoryLeadName}
+          messages={messageHistory}
+          onClose={() => setMessageHistory(null)}
+        />
+      ) : null}
     </div>
   );
 }

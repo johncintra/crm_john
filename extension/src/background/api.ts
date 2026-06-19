@@ -1,6 +1,6 @@
 import { mapLeadContext, mapTemplate } from '../shared/mappers';
 import { getStoredSession, setStoredSession } from '../shared/storage';
-import type { RemotePipeline, RemotePipelineBoard } from '../shared/types';
+import type { RemoteLeadMessage, RemotePipeline, RemotePipelineBoard, SyncMessageItem } from '../shared/types';
 import {
   activatePreviewSession,
   addPreviewLeadNote,
@@ -307,4 +307,17 @@ export async function movePipelineCard(pipelineId: string, leadId: string, stage
 
 export async function removePipelineCard(pipelineId: string, leadId: string): Promise<void> {
   await request(`/pipelines/${pipelineId}/cards/${leadId}`, { method: 'DELETE' });
+}
+
+export async function fetchLeadMessages(leadId: string, hours = 24): Promise<RemoteLeadMessage[]> {
+  return request(`/leads/${leadId}/messages?hours=${hours}`);
+}
+
+export async function syncLeadMessages(leadId: string, messages: SyncMessageItem[]): Promise<void> {
+  if (!messages.length) return;
+  await request(`/leads/${leadId}/messages/sync`, { method: 'POST', body: { messages } });
+}
+
+export async function updateLeadPhone(leadId: string, phone: string): Promise<void> {
+  await request(`/leads/${leadId}/phone`, { method: 'PATCH', body: { phone } });
 }

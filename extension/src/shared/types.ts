@@ -197,6 +197,22 @@ export interface LeadContextResponse {
   error?: string;
 }
 
+export type MessageDirection = 'INBOUND' | 'OUTBOUND';
+
+export interface RemoteLeadMessage {
+  id: string;
+  direction: MessageDirection;
+  content: string;
+  sentAt: string;
+}
+
+export interface SyncMessageItem {
+  direction: MessageDirection;
+  content: string;
+  sentAt: string;
+  externalId?: string;
+}
+
 export type BackgroundRequest =
   | { type: 'auth:get-session' }
   | { type: 'auth:login'; payload: LoginPayload }
@@ -220,7 +236,10 @@ export type BackgroundRequest =
   | { type: 'pipeline:reorder-stages'; payload: { pipelineId: string; stageId: string; targetStageId: string } }
   | { type: 'pipeline:assign-contact'; payload: { pipelineId: string; stageId: string; name: string; phone?: string | null } }
   | { type: 'pipeline:move-card'; payload: { pipelineId: string; leadId: string; stageId: string } }
-  | { type: 'pipeline:remove-card'; payload: { pipelineId: string; leadId: string } };
+  | { type: 'pipeline:remove-card'; payload: { pipelineId: string; leadId: string } }
+  | { type: 'lead:fetch-messages'; payload: { leadId: string; hours?: number } }
+  | { type: 'lead:sync-messages'; payload: { leadId: string; messages: SyncMessageItem[] } }
+  | { type: 'lead:update-phone'; payload: { leadId: string; phone: string } };
 
 export type BackgroundResponse =
   | { ok: true; data?: unknown }

@@ -185,6 +185,22 @@ export class CrmService {
     return { ok: true };
   }
 
+  async updateLeadPhone(userId: string, leadId: string, phone: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+    const normalizedPhone = this.normalizePhone(phone);
+    if (!normalizedPhone) {
+      throw new BadRequestException('Invalid phone number.');
+    }
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { phone, normalizedPhone }
+    });
+
+    return { ok: true };
+  }
+
   async syncLeadMessages(userId: string, leadId: string, messages: SyncMessageItemDto[]) {
     const workspaceId = await this.getWorkspaceId(userId);
     await this.requireLead(workspaceId, leadId);

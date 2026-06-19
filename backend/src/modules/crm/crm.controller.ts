@@ -21,6 +21,7 @@ import { CreateNoteDto } from './dto/create-note.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { UpdateLeadStageDto } from './dto/update-lead-stage.dto';
+import { UpdateLeadPhoneDto } from './dto/update-lead-phone.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { PipelineCreateDto } from './dto/pipeline-create.dto';
 import { PipelineRenameDto } from './dto/pipeline-rename.dto';
@@ -104,6 +105,16 @@ export class CrmController {
     @Body() dto: SyncMessagesDto
   ) {
     return this.crmService.syncLeadMessages(user.sub, leadId, dto.messages);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('leads/:leadId/phone')
+  updateLeadPhone(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: UpdateLeadPhoneDto
+  ) {
+    return this.crmService.updateLeadPhone(user.sub, leadId, dto.phone);
   }
 
   @UseGuards(JwtAuthGuard)

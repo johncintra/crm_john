@@ -42,7 +42,7 @@ interface FunnelBoardProps {
   onCreateFunnel: () => void;
   onConfigureFunnel: () => void;
   onCopyEmail?: (email: string) => void;
-  onOpenConversation: (conversation: { name: string; phone: string | null }) => void;
+  onOpenConversation: (conversation: { name: string; phone: string | null; leadId?: string }) => void;
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void;
   onMoveCard: (cardId: string, columnId: string) => void;
   onRemoveCard: (cardId: string) => void;

@@ -8,6 +8,7 @@ import {
   deletePipelineStage,
   fetchCheckoutBoard,
   fetchLeadContext,
+  fetchLeadMessages,
   fetchPipelineBoard,
   fetchPipelines,
   fetchWorkspaceTemplates,
@@ -17,7 +18,9 @@ import {
   removePipelineCard,
   renamePipeline,
   reorderPipelineStages,
+  syncLeadMessages,
   updateApiBaseUrl,
+  updateLeadPhone,
   updateLeadStage,
   updatePipelineStage,
   updateTaskStatus
@@ -149,6 +152,21 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         }
         case 'pipeline:remove-card': {
           await removePipelineCard(message.payload.pipelineId, message.payload.leadId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:fetch-messages': {
+          const data = await fetchLeadMessages(message.payload.leadId, message.payload.hours);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:sync-messages': {
+          await syncLeadMessages(message.payload.leadId, message.payload.messages);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:update-phone': {
+          await updateLeadPhone(message.payload.leadId, message.payload.phone);
           sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }
