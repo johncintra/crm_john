@@ -499,15 +499,6 @@ export function SidebarApp() {
     phone: string | null;
     leadId?: string;
   }) => {
-    if (leadId) {
-      void sendMessage<RemoteLeadMessage[]>({ type: 'lead:fetch-messages', payload: { leadId, hours: 24 } })
-        .then((history) => {
-          setMessageHistoryLeadName(name);
-          setMessageHistory(history);
-        })
-        .catch(() => {});
-    }
-
     const normalizedCardPhone = phone ? normalizePhone(phone) : null;
     const normalizedCardName = name.trim().toLowerCase();
     const matchedConversation =
@@ -541,29 +532,53 @@ export function SidebarApp() {
     const finalPhone = resolvedPhone ?? conversationMatch?.phone ?? null;
     const finalName = conversationMatch?.name ?? name;
 
-    const opened = await openConversationInWhatsApp(finalPhone ?? '', finalName);
-    if (opened) {
-      setWorkspaceView('funnel');
-      return;
-    }
+    let opened = await openConversationInWhatsApp(finalPhone ?? '', finalName);
 
-    if (finalPhone && (await openConversationByPhoneNumber(finalPhone))) {
-      setWorkspaceView('funnel');
-      setToast('Abrindo conversa por numero.');
-      return;
+    if (!opened && finalPhone) {
+      opened = await openConversationByPhoneNumber(finalPhone);
+      if (opened) {
+        setToast('Abrindo conversa por numero.');
+      }
     }
 
     // Real phone known but no match in this WhatsApp account's own chat
     // list/search (e.g. the seller switched to a different number) — open a
     // brand new chat by phone via WhatsApp's universal deep link.
-    if (finalPhone && !conversationMatch) {
-      if (forceOpenConversationByPhoneNumber(finalPhone)) {
-        setWorkspaceView('funnel');
-        return;
+    if (!opened && finalPhone && !conversationMatch) {
+      opened = forceOpenConversationByPhoneNumber(finalPhone);
+    }
+
+    if (opened) {
+      setWorkspaceView('funnel');
+    }
+
+    if (opened && leadId && !phone) {
+      void getRealContactPhoneNumber().then((capturedPhone) => {
+        if (!capturedPhone) return;
+        void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone: capturedPhone } }).catch(() => {});
+      });
+    }
+
+    if (opened && leadId) {
+      try {
+        const history = await sendMessage<RemoteLeadMessage[]>({
+          type: 'lead:fetch-messages',
+          payload: { leadId, hours: 24 }
+        });
+        setMessageHistoryLeadName(name);
+        setMessageHistory(history);
+      } catch {
+        // non-critical — history is a bonus on top of opening the conversation
       }
     }
 
-    setToast('Nao consegui focar ou iniciar a conversa automaticamente.');
+    if (!opened) {
+      setToast(
+        finalPhone
+          ? 'Nao consegui focar ou iniciar a conversa automaticamente.'
+          : 'Telefone real desse contato ainda nao foi capturado. Abra a conversa com ele no numero original para habilitar.'
+      );
+    }
   };
 
   const handleSendTemplate = async (card: FunnelCard, columnName: string) => {

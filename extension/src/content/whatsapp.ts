@@ -759,7 +759,11 @@ export function forceOpenConversationByPhoneNumber(phone: string): boolean {
   nextUrl.searchParams.set('phone', normalizedPhone);
   nextUrl.searchParams.set('type', 'phone_number');
   nextUrl.searchParams.set('app_absent', '0');
-  window.location.assign(`${nextUrl.pathname}${nextUrl.search}`);
+  // Use the SPA's own router (synthetic link click) instead of
+  // window.location.assign — assigning the location directly triggers a
+  // full page reload, which would wipe out the extension's React state
+  // (including any panel shown right after this call).
+  navigateWithinWhatsApp(`${nextUrl.pathname}${nextUrl.search}`);
   return true;
 }
 
