@@ -679,7 +679,7 @@ export class CrmService {
     const workspaceId = await this.getWorkspaceId(userId);
     const pipeline = await this.requirePipeline(workspaceId, pipelineId);
     const leads = await this.prisma.lead.findMany({
-      where: { workspaceId, pipelineId },
+      where: { workspaceId, pipelineId, currentStageId: { not: null } },
       include: {
         currentStage: true,
         tags: { include: { tag: true } },
@@ -699,7 +699,7 @@ export class CrmService {
           email: lead.email,
           phone: lead.phone,
           avatarUrl: null,
-          columnId: lead.currentStageId ?? pipeline.stages[0]?.id ?? null,
+          columnId: lead.currentStageId,
           source: lead.source,
           temperature: lead.temperature,
           tags: lead.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
