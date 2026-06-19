@@ -831,41 +831,19 @@ function findVisiblePhoneLikeStrings(): Set<string> {
   return result;
 }
 
-// WhatsApp's contact info panel always shows the real phone number as
-// visible text, even for named/saved contacts (unlike the chat list, which
-// never exposes it). We don't know exactly which element opens that panel
-// across WhatsApp Web versions, so we try a few candidates and diff the
-// page's visible phone-like strings before/after each click — whichever
-// click reveals a brand new number is almost certainly the contact's real
-// phone, regardless of the exact DOM structure.
-const HEADER_CLICK_CANDIDATES = [
-  '#main header img',
-  '#main header [title]',
-  '#main header span[dir="auto"]',
-  '#main header'
-];
+// Read-only diagnostic — logs the header structure without clicking
+// anything, so we can find the right element safely (clicking the wrong
+// thing in WhatsApp's header could trigger a real voice/video call).
+export function inspectConversationHeader(): void {
+  const mainEl = document.querySelector('#main');
+  const headers = document.querySelectorAll('header');
+  console.log('[CRM John] #main existe?', !!mainEl, '| headers no documento todo:', headers.length);
+
+  headers.forEach((header, index) => {
+    console.log(`[CRM John] header #${index}:`, header.outerHTML.slice(0, 2000));
+  });
+}
 
 export async function getRealContactPhoneNumber(): Promise<string | null> {
-  const before = findVisiblePhoneLikeStrings();
-
-  for (const selector of HEADER_CLICK_CANDIDATES) {
-    const target = document.querySelector<HTMLElement>(selector);
-    if (!target) {
-      continue;
-    }
-
-    target.click();
-    await new Promise((resolve) => window.setTimeout(resolve, 700));
-
-    const after = findVisiblePhoneLikeStrings();
-    const newPhones = [...after].filter((phone) => !before.has(phone));
-    console.log('[CRM John] clique em', selector, '-> telefones novos no texto da pagina:', newPhones);
-
-    if (newPhones.length) {
-      target.click();
-      return newPhones[0];
-    }
-  }
-
   return null;
 }

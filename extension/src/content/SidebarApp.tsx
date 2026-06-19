@@ -12,6 +12,7 @@ import {
   getOpenConversationMessages,
   getRealContactPhoneNumber,
   getSelectedConversationFromList,
+  inspectConversationHeader,
   insertTextIntoWhatsAppComposer,
   openConversationByPhoneNumber,
   openConversationInWhatsApp
@@ -967,6 +968,16 @@ export function SidebarApp() {
                 <p className="crm-mt-1 crm-text-xs crm-text-slate-400">{session?.user?.email}</p>
                 <button type="button" className="crm-rail-cta" onClick={() => void handleLogout()}>
                   Sair da conta
+                </button>
+                <button
+                  type="button"
+                  className="crm-rail-cta crm-mt-2"
+                  onClick={() => {
+                    inspectConversationHeader();
+                    setToast('Veja o console (F12) para o diagnostico.');
+                  }}
+                >
+                  [Debug] Inspecionar header da conversa
                 </button>
               </div>
               <div className="crm-rail-grid">
