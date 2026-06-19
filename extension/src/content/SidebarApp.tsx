@@ -644,10 +644,22 @@ export function SidebarApp() {
     const tempId = `card-${Date.now()}-${conversationItem.id}`;
     let phone = conversationItem.phone;
 
-    if (!phone && currentConversationListItem?.id === conversationItem.id) {
-      phone = await getRealContactPhoneNumber();
-      if (phone) {
-        setToast(`Telefone capturado: ${phone}`);
+    if (!phone) {
+      // Capturing the real phone requires that contact's conversation to be
+      // the one currently open (the contact-info panel belongs to whatever
+      // chat is active). Open it first if it isn't already, instead of only
+      // capturing when the seller happened to already be looking at it.
+      const isAlreadyActive = currentConversationListItem?.id === conversationItem.id;
+      const opened = isAlreadyActive || (await openConversationInWhatsApp(conversationItem.phone ?? '', conversationItem.name));
+
+      if (opened) {
+        if (!isAlreadyActive) {
+          await new Promise((resolve) => window.setTimeout(resolve, 400));
+        }
+        phone = await getRealContactPhoneNumber();
+        if (phone) {
+          setToast(`Telefone capturado: ${phone}`);
+        }
       }
     }
 
