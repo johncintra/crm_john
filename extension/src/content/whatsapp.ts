@@ -831,17 +831,23 @@ function findVisiblePhoneLikeStrings(): Set<string> {
   return result;
 }
 
-// Read-only diagnostic — logs the header structure without clicking
-// anything, so we can find the right element safely (clicking the wrong
-// thing in WhatsApp's header could trigger a real voice/video call).
+// Read-only diagnostic — logs every data-testid present on the page (this
+// WhatsApp Web build uses an unfamiliar atomic-CSS structure with no #main
+// and no obviously-named header, so data-testid is the most likely stable
+// hook). No clicking, so it's always safe to run.
 export function inspectConversationHeader(): void {
-  const mainEl = document.querySelector('#main');
-  const headers = document.querySelectorAll('header');
-  console.log('[CRM John] #main existe?', !!mainEl, '| headers no documento todo:', headers.length);
-
-  headers.forEach((header, index) => {
-    console.log(`[CRM John] header #${index}:`, header.outerHTML.slice(0, 2000));
+  const testIds = new Set<string>();
+  document.querySelectorAll('[data-testid]').forEach((el) => {
+    const value = el.getAttribute('data-testid');
+    if (value) testIds.add(value);
   });
+
+  const messageNodes = document.querySelectorAll('[data-pre-plain-text]');
+  const idNodes = document.querySelectorAll('[data-id]');
+
+  console.log('[CRM John] data-testid presentes na pagina:', [...testIds].sort());
+  console.log('[CRM John] mensagens com data-pre-plain-text:', messageNodes.length);
+  console.log('[CRM John] elementos com data-id:', idNodes.length, Array.from(idNodes).slice(0, 3).map((n) => n.getAttribute('data-id')));
 }
 
 export async function getRealContactPhoneNumber(): Promise<string | null> {
