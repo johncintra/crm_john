@@ -763,7 +763,7 @@ export class CrmService {
     const normalizedPhone = this.normalizePhone(contact.phone);
     let lead = normalizedPhone
       ? await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, normalizedPhone } })
-      : null;
+      : await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } });
     if (lead) {
       lead = await this.prisma.lead.update({ where: { id: lead.id }, data: { currentStageId: stageId, name: contact.name } });
     } else {
