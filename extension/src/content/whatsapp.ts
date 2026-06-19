@@ -870,12 +870,21 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
     return null;
   }
 
+  const wasAlreadyOpen = !!document.querySelector('[data-testid="drawer-right"]');
+  console.log('[CRM John] getRealContactPhoneNumber: painel ja estava aberto?', wasAlreadyOpen);
+
   const before = findVisiblePhoneLikeStrings();
-  titleEl.click();
+
+  // If the drawer was already open (e.g. left open from a previous lookup),
+  // clicking the title would close it instead of opening it — skip the
+  // open-click in that case.
+  if (!wasAlreadyOpen) {
+    titleEl.click();
+  }
 
   let phone: string | null = null;
 
-  for (let attempt = 0; attempt < 12; attempt += 1) {
+  for (let attempt = 0; attempt < 16; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 250));
 
     const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
@@ -897,9 +906,16 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
     }
   }
 
+  if (!phone) {
+    const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
+    console.log('[CRM John] getRealContactPhoneNumber: painel encontrado apos espera?', !!panel, 'texto do painel:', panel?.textContent?.slice(0, 300));
+  }
+
   // Close the drawer again so we don't leave the seller's UI in a
-  // different state than they had it.
-  titleEl.click();
+  // different state than they had it (only if we were the ones who opened it).
+  if (!wasAlreadyOpen) {
+    titleEl.click();
+  }
 
   console.log('[CRM John] getRealContactPhoneNumber resultado:', phone);
   return phone;
