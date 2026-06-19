@@ -22,4 +22,4 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/backend/prisma ./backend/prisma
 EXPOSE 3000
-CMD ["sh", "-c", "cd backend && npx prisma migrate deploy && node dist/main.js"]
+CMD ["sh", "-c", "cd backend && npx prisma migrate deploy && npm start"]
