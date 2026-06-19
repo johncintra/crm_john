@@ -16,7 +16,7 @@ COPY package*.json ./
 COPY backend/package.json ./backend/package.json
 COPY extension/package.json ./extension/package.json
 RUN npm ci --omit=dev
-COPY --from=builder /app/backend/node_modules/.prisma ./backend/node_modules/.prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/backend/prisma ./backend/prisma
 EXPOSE 3000
