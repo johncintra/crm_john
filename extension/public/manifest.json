@@ -4,7 +4,12 @@
   "description": "Sidebar premium para contexto comercial no WhatsApp Web.",
   "version": "0.1.0",
   "permissions": ["storage", "tabs", "activeTab"],
-  "host_permissions": ["https://web.whatsapp.com/*", "http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "https://crm-api.aprovapm.com.br/*"
+  ],
   "background": {
     "service_worker": "assets/background.js",
     "type": "module"

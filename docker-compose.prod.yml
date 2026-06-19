@@ -40,7 +40,7 @@ services:
       APP_PORT: 3000
       APP_CORS_ORIGIN: ${CORS_ORIGIN:-https://crm-api.aprovapm.com.br}
     ports:
-      - '127.0.0.1:3001:3000'
+      - '127.0.0.1:4000:3000'
     networks:
       - crm-network
     depends_on:
