@@ -851,11 +851,22 @@ export function inspectConversationHeader(): void {
 }
 
 export async function getRealContactPhoneNumber(): Promise<string | null> {
-  const titleEl = document.querySelector<HTMLElement>(
-    '[data-testid="conversation-info-header-chat-title"], [data-testid="conversation-info-header"]'
-  );
+  let titleEl: HTMLElement | null = null;
+
+  // The conversation header may still be re-rendering right after we just
+  // navigated/clicked into it, so retry locating the title a few times
+  // instead of giving up on the first miss.
+  for (let attempt = 0; attempt < 6 && !titleEl; attempt += 1) {
+    titleEl = document.querySelector<HTMLElement>(
+      '[data-testid="conversation-info-header-chat-title"], [data-testid="conversation-info-header"]'
+    );
+    if (!titleEl) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+  }
 
   if (!titleEl) {
+    console.log('[CRM John] getRealContactPhoneNumber: titulo da conversa nao encontrado.');
     return null;
   }
 
@@ -864,7 +875,7 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
 
   let phone: string | null = null;
 
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 250));
 
     const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
