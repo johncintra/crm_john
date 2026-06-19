@@ -112,7 +112,20 @@ export function SidebarApp() {
   const boardColumns = isCheckoutFunnelSelected
     ? checkoutColumns
     : selectedLocalFunnel?.columns ?? [];
-  const boardCards = isCheckoutFunnelSelected ? checkoutCards : selectedLocalFunnel?.cards ?? [];
+  const boardCardsRaw = isCheckoutFunnelSelected ? checkoutCards : selectedLocalFunnel?.cards ?? [];
+  const boardCards = useMemo(() => {
+    if (!conversations.length) return boardCardsRaw;
+    return boardCardsRaw.map((card) => {
+      if (card.avatarUrl) return card;
+      const normalizedCardPhone = card.phone ? normalizePhone(card.phone) : null;
+      const normalizedCardName = card.name.trim().toLowerCase();
+      const match =
+        (normalizedCardPhone
+          ? conversations.find((item) => item.phone && normalizePhone(item.phone) === normalizedCardPhone)
+          : null) ?? conversations.find((item) => item.name.trim().toLowerCase() === normalizedCardName);
+      return match?.avatarUrl ? { ...card, avatarUrl: match.avatarUrl } : card;
+    });
+  }, [boardCardsRaw, conversations]);
 
   const selectedConversationListItem = useMemo(
     () => getSelectedConversationFromList(),
