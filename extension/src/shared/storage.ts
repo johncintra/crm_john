@@ -21,3 +21,23 @@ export async function setStoredSession(session: AuthSession): Promise<void> {
 export async function clearStoredSession(): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY);
 }
+
+const PENDING_HISTORY_KEY = 'crm-john-pending-message-history';
+
+export interface PendingMessageHistory {
+  leadId: string;
+  name: string;
+}
+
+export async function savePendingMessageHistory(value: PendingMessageHistory): Promise<void> {
+  await chrome.storage.local.set({ [PENDING_HISTORY_KEY]: value });
+}
+
+export async function takePendingMessageHistory(): Promise<PendingMessageHistory | null> {
+  const result = await chrome.storage.local.get(PENDING_HISTORY_KEY);
+  const value = (result[PENDING_HISTORY_KEY] as PendingMessageHistory | undefined) ?? null;
+  if (value) {
+    await chrome.storage.local.remove(PENDING_HISTORY_KEY);
+  }
+  return value;
+}

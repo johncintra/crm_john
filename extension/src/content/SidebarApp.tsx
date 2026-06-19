@@ -5,6 +5,7 @@ import { useBackground } from './hooks/useBackground';
 import { useWhatsAppConversation } from './hooks/useWhatsAppConversation';
 import { useWhatsAppConversationList } from './hooks/useWhatsAppConversationList';
 import { copyToClipboard, normalizePhone } from '../shared/utils';
+import { savePendingMessageHistory, takePendingMessageHistory } from '../shared/storage';
 import {
   getAllWhatsAppConversationList,
   forceOpenConversationByPhoneNumber,
@@ -290,6 +291,26 @@ export function SidebarApp() {
     void refreshLeadContext();
   }, [refreshLeadContext, isAuthenticated]);
 
+  // Restore the "conversa recente" panel after opening a brand-new chat by
+  // phone caused a full page reload (the only reliable way to open a chat
+  // with zero prior history on this WhatsApp number).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    void takePendingMessageHistory().then((pending) => {
+      if (!pending) return;
+      void sendMessage<RemoteLeadMessage[]>({
+        type: 'lead:fetch-messages',
+        payload: { leadId: pending.leadId, hours: 24 }
+      })
+        .then((history) => {
+          setMessageHistoryLeadName(pending.name);
+          setMessageHistory(history);
+        })
+        .catch(() => {});
+    });
+  }, [isAuthenticated, sendMessage]);
+
   // While a conversation tied to a known lead is open, periodically scrape
   // the visible messages and sync the last 24h to the backend, so the
   // conversation can be recovered from a different WhatsApp number later.
@@ -534,9 +555,17 @@ export function SidebarApp() {
 
     // Real phone known but no match in this WhatsApp account's own chat
     // list/search (e.g. the seller switched to a different number) — open a
-    // brand new chat by phone via WhatsApp's universal deep link.
+    // brand new chat by phone via WhatsApp's universal deep link. This is a
+    // full page reload (the only reliable way WhatsApp Web opens a chat it
+    // has zero history with), so save the history lookup for after reload
+    // and skip the rest of this render entirely.
     if (!opened && finalPhone && !conversationMatch) {
-      opened = forceOpenConversationByPhoneNumber(finalPhone);
+      if (leadId) {
+        await savePendingMessageHistory({ leadId, name });
+      }
+      if (forceOpenConversationByPhoneNumber(finalPhone)) {
+        return;
+      }
     }
 
     if (opened) {

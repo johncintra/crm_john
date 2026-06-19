@@ -759,11 +759,13 @@ export function forceOpenConversationByPhoneNumber(phone: string): boolean {
   nextUrl.searchParams.set('phone', normalizedPhone);
   nextUrl.searchParams.set('type', 'phone_number');
   nextUrl.searchParams.set('app_absent', '0');
-  // Use the SPA's own router (synthetic link click) instead of
-  // window.location.assign — assigning the location directly triggers a
-  // full page reload, which would wipe out the extension's React state
-  // (including any panel shown right after this call).
-  navigateWithinWhatsApp(`${nextUrl.pathname}${nextUrl.search}`);
+  // A synthetic click (navigateWithinWhatsApp) only works if WhatsApp's own
+  // router intercepts it, which turned out to be unreliable in practice
+  // (needed several clicks before it "took"). window.location.assign is
+  // exactly how official wa.me/click-to-chat links open a brand new
+  // conversation, and WhatsApp Web's bootstrap explicitly reads ?phone= on
+  // load — it's a full reload, but a reliable one.
+  window.location.assign(`${nextUrl.pathname}${nextUrl.search}`);
   return true;
 }
 
