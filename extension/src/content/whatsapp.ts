@@ -833,25 +833,6 @@ function findVisiblePhoneLikeStrings(): Set<string> {
   return result;
 }
 
-// Read-only diagnostic — logs every data-testid present on the page (this
-// WhatsApp Web build uses an unfamiliar atomic-CSS structure with no #main
-// and no obviously-named header, so data-testid is the most likely stable
-// hook). No clicking, so it's always safe to run.
-export function inspectConversationHeader(): void {
-  const testIds = new Set<string>();
-  document.querySelectorAll('[data-testid]').forEach((el) => {
-    const value = el.getAttribute('data-testid');
-    if (value) testIds.add(value);
-  });
-
-  const messageNodes = document.querySelectorAll('[data-pre-plain-text]');
-  const idNodes = document.querySelectorAll('[data-id]');
-
-  console.log('[CRM John] data-testid presentes na pagina:', [...testIds].sort());
-  console.log('[CRM John] mensagens com data-pre-plain-text:', messageNodes.length);
-  console.log('[CRM John] elementos com data-id:', idNodes.length, Array.from(idNodes).slice(0, 3).map((n) => n.getAttribute('data-id')));
-}
-
 export async function getRealContactPhoneNumber(): Promise<string | null> {
   let titleEl: HTMLElement | null = null;
 
@@ -868,7 +849,6 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
   }
 
   if (!titleEl) {
-    console.log('[CRM John] getRealContactPhoneNumber: titulo da conversa nao encontrado.');
     return null;
   }
 
@@ -877,12 +857,6 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
   // whether it's actually showing content — check for real text instead.
   const existingPanel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
   const wasAlreadyOpen = !!existingPanel && (existingPanel.textContent ?? '').trim().length > 20;
-  console.log(
-    '[CRM John] getRealContactPhoneNumber: painel existe?',
-    !!existingPanel,
-    '| tem conteudo (considerado aberto)?',
-    wasAlreadyOpen
-  );
 
   const before = findVisiblePhoneLikeStrings();
 
@@ -917,17 +891,11 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
     }
   }
 
-  if (!phone) {
-    const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
-    console.log('[CRM John] getRealContactPhoneNumber: painel encontrado apos espera?', !!panel, 'texto do painel:', panel?.textContent?.slice(0, 300));
-  }
-
   // Close the drawer again so we don't leave the seller's UI in a
   // different state than they had it (only if we were the ones who opened it).
   if (!wasAlreadyOpen) {
     titleEl.click();
   }
 
-  console.log('[CRM John] getRealContactPhoneNumber resultado:', phone);
   return phone;
 }

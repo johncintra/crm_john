@@ -13,7 +13,6 @@ import {
   getOpenConversationMessages,
   getRealContactPhoneNumber,
   getSelectedConversationFromList,
-  inspectConversationHeader,
   insertTextIntoWhatsAppComposer,
   openConversationByPhoneNumber,
   openConversationInWhatsApp
@@ -579,11 +578,7 @@ export function SidebarApp() {
 
     if (opened && leadId && !phone) {
       void getRealContactPhoneNumber().then((capturedPhone) => {
-        console.log('[CRM John] captura de telefone (apos abrir conversa):', capturedPhone, 'leadId:', leadId);
-        if (!capturedPhone) {
-          setToast('Nao consegui capturar o telefone real (veja o console).');
-          return;
-        }
+        if (!capturedPhone) return;
         setToast(`Telefone capturado: ${capturedPhone}`);
         void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone: capturedPhone } }).catch(() => {});
       });
@@ -1059,16 +1054,6 @@ export function SidebarApp() {
                 <p className="crm-mt-1 crm-text-xs crm-text-slate-400">{session?.user?.email}</p>
                 <button type="button" className="crm-rail-cta" onClick={() => void handleLogout()}>
                   Sair da conta
-                </button>
-                <button
-                  type="button"
-                  className="crm-rail-cta crm-mt-2"
-                  onClick={() => {
-                    inspectConversationHeader();
-                    setToast('Veja o console (F12) para o diagnostico.');
-                  }}
-                >
-                  [Debug] Inspecionar header da conversa
                 </button>
               </div>
               <div className="crm-rail-grid">
