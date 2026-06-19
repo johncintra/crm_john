@@ -816,39 +816,23 @@ export function getOpenConversationMessages(sinceMs: number): ScrapedMessage[] {
   return messages;
 }
 
-const CONTACT_INFO_PANEL_SELECTORS = [
-  '[data-testid="drawer-right"]',
-  '#app aside[data-testid]',
-  'div[role="dialog"]'
-];
+// WhatsApp Web tags message rows with a data-id like
+// "true_5511999999999@c.us_<messageId>" (the JID of the chat). Reading it
+// is passive — no clicking/waiting/opening side panels required — and
+// works even for named/saved contacts that never show their number as
+// visible text anywhere in the chat list or header.
+const JID_PHONE_PATTERN = /(\d{6,15})@(?:c\.us|s\.whatsapp\.net)/;
 
-export async function getRealContactPhoneNumber(): Promise<string | null> {
-  const header = document.querySelector<HTMLElement>(
-    '#main header [title], #main header span[dir="auto"], #main header'
-  );
+export function getRealContactPhoneNumber(): string | null {
+  const nodes = document.querySelectorAll<HTMLElement>('#main [data-id]');
 
-  if (!header) {
-    return null;
-  }
-
-  header.click();
-  await new Promise((resolve) => window.setTimeout(resolve, 400));
-
-  let phone: string | null = null;
-  for (const selector of CONTACT_INFO_PANEL_SELECTORS) {
-    const panel = document.querySelector<HTMLElement>(selector);
-    if (!panel) {
-      continue;
-    }
-
-    const candidate = extractPhoneFromText(panel.textContent ?? '');
-    if (candidate) {
-      phone = candidate;
-      break;
+  for (const node of nodes) {
+    const dataId = node.getAttribute('data-id') ?? '';
+    const match = dataId.match(JID_PHONE_PATTERN);
+    if (match) {
+      return match[1];
     }
   }
 
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
-
-  return phone;
+  return null;
 }

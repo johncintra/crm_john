@@ -295,10 +295,10 @@ export function SidebarApp() {
     if (!isAuthenticated || !context?.lead?.id || context.lead.phone) return;
     const leadId = context.lead.id;
 
-    void getRealContactPhoneNumber().then((phone) => {
-      if (!phone) return;
+    const phone = getRealContactPhoneNumber();
+    if (phone) {
       void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone } }).catch(() => {});
-    });
+    }
   }, [context?.lead?.id, context?.lead?.phone, isAuthenticated, sendMessage]);
 
   // While a conversation tied to a known lead is open, periodically scrape
@@ -553,10 +553,11 @@ export function SidebarApp() {
     }
 
     if (opened && leadId && !phone) {
-      void getRealContactPhoneNumber().then((capturedPhone) => {
+      window.setTimeout(() => {
+        const capturedPhone = getRealContactPhoneNumber();
         if (!capturedPhone) return;
         void sendMessage({ type: 'lead:update-phone', payload: { leadId, phone: capturedPhone } }).catch(() => {});
-      });
+      }, 500);
     }
 
     if (opened && leadId) {
