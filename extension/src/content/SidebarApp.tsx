@@ -20,6 +20,7 @@ import {
   type FunnelCard,
   type FunnelColumn
 } from './components/FunnelBoard';
+import { LoginScreen } from './components/LoginScreen';
 
 type WorkspaceView = 'general' | 'funnel';
 type RailPanel = 'account' | 'templates' | 'lists' | 'calendar';
@@ -47,6 +48,8 @@ export function SidebarApp() {
   const sendMessage = useBackground();
   const conversation = useWhatsAppConversation();
   const [session, setSession] = useState<AuthSession | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const isAuthenticated = Boolean(session?.token);
   const [context, setContext] = useState<LeadContext | null>(demoLeadContext);
   const [toast, setToast] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('funnel');
@@ -251,21 +254,44 @@ export function SidebarApp() {
       } catch {
         setSession(null);
         setContext(demoLeadContext);
+      } finally {
+        setAuthChecked(true);
       }
     })();
   }, [sendMessage]);
 
+  const handleLogin = async (email: string, password: string) => {
+    const nextSession = await sendMessage<AuthSession>({
+      type: 'auth:login',
+      payload: { email, password }
+    });
+    setSession(nextSession);
+  };
+
+  const handleLogout = async () => {
+    await sendMessage({ type: 'auth:logout' });
+    setSession(null);
+    setFunnels([]);
+    setSelectedFunnelId('');
+    setFunnelsLoaded(false);
+    setCheckoutBoard(null);
+    setContext(demoLeadContext);
+  };
+
   useEffect(() => {
+    if (!isAuthenticated) return;
     void refreshLeadContext();
-  }, [refreshLeadContext, session?.token]);
+  }, [refreshLeadContext, isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     void loadCheckoutBoard();
-  }, [loadCheckoutBoard, session?.token]);
+  }, [loadCheckoutBoard, isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     void loadWorkspaceTemplates();
-  }, [loadWorkspaceTemplates, session?.token]);
+  }, [loadWorkspaceTemplates, isAuthenticated]);
 
   useEffect(() => {
     if (selectedFunnelId === CHECKOUT_FUNNEL_ID) {
@@ -305,7 +331,10 @@ export function SidebarApp() {
     }
   }, [sendMessage]);
 
-  useEffect(() => { void loadFunnels(); }, [loadFunnels]);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void loadFunnels();
+  }, [loadFunnels, isAuthenticated]);
 
   const loadFunnelBoard = useCallback(async (pipelineId: string) => {
     try {
@@ -711,6 +740,18 @@ export function SidebarApp() {
           ? 'Listas de Contatos'
           : 'Calendario';
 
+  if (!authChecked) {
+    return <div className="crm-app-shell crm-fade-in" />;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="crm-app-shell crm-fade-in">
+        <LoginScreen onLogin={handleLogin} />
+      </div>
+    );
+  }
+
   return (
     <div className="crm-app-shell crm-fade-in">
       <div className={`crm-top-toolbar ${workspaceView === 'general' ? 'is-hidden' : ''}`}>
@@ -856,9 +897,10 @@ export function SidebarApp() {
           {railPanel === 'account' ? (
             <div className="crm-rail-stack">
               <div className="crm-rail-card">
-                <div className="crm-rail-chip">free</div>
-                <button type="button" className="crm-rail-cta">
-                  Atualizar para VIP
+                <div className="crm-rail-chip">{session?.user?.name ?? 'Conta'}</div>
+                <p className="crm-mt-1 crm-text-xs crm-text-slate-400">{session?.user?.email}</p>
+                <button type="button" className="crm-rail-cta" onClick={() => void handleLogout()}>
+                  Sair da conta
                 </button>
               </div>
               <div className="crm-rail-grid">

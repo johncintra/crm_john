@@ -63,6 +63,21 @@ export function PopupApp() {
     }
   };
 
+  const handleLogout = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await sendMessage({ type: 'auth:logout' });
+      const current = await sendMessage<AuthSession>({ type: 'auth:get-session' });
+      setSession(current);
+    } catch (logoutError) {
+      setError(logoutError instanceof Error ? logoutError.message : 'Falha ao sair da conta.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="crm-min-h-screen crm-bg-aurora crm-p-4 crm-text-white">
       <div className="crm-w-[360px] crm-overflow-hidden crm-rounded-[28px] crm-border crm-border-white/10 crm-bg-slate-950/90 crm-shadow-glow crm-shadow-black/60">
@@ -71,24 +86,28 @@ export function PopupApp() {
             <Sparkles className="crm-h-3.5 crm-w-3.5" />
             CRM John
           </div>
-          <h1 className="crm-mt-3 crm-text-xl crm-font-semibold">Modo Interno</h1>
+          <h1 className="crm-mt-3 crm-text-xl crm-font-semibold">Minha Conta</h1>
           <p className="crm-mt-1 crm-text-sm crm-leading-6 crm-text-slate-400">
-            A extensão conecta automaticamente ao workspace interno do backend, sem exigir login manual.
+            O login é feito na barra lateral do WhatsApp Web. Aqui você só acompanha a sessão atual.
           </p>
         </div>
 
         <div className="crm-space-y-4 crm-p-5">
-          <div className="crm-rounded-2xl crm-border crm-border-emerald-400/15 crm-bg-emerald-400/10 crm-p-4">
-            <p className="crm-text-xs crm-font-semibold crm-uppercase crm-tracking-[0.2em] crm-text-emerald-300">
-              Sessão interna
-            </p>
-            <p className="crm-mt-2 crm-text-sm crm-font-medium crm-text-white">
-              {session?.user?.name ?? 'Operação Interna'}
-            </p>
-            <p className="crm-mt-1 crm-text-xs crm-text-emerald-100/75">
-              {session?.user?.email ?? 'interno@crmjohn.local'}
-            </p>
-          </div>
+          {session?.token && session.user ? (
+            <div className="crm-rounded-2xl crm-border crm-border-emerald-400/15 crm-bg-emerald-400/10 crm-p-4">
+              <p className="crm-text-xs crm-font-semibold crm-uppercase crm-tracking-[0.2em] crm-text-emerald-300">
+                Conectado
+              </p>
+              <p className="crm-mt-2 crm-text-sm crm-font-medium crm-text-white">{session.user.name}</p>
+              <p className="crm-mt-1 crm-text-xs crm-text-emerald-100/75">{session.user.email}</p>
+            </div>
+          ) : (
+            <div className="crm-rounded-2xl crm-border crm-border-amber-400/15 crm-bg-amber-400/10 crm-p-4">
+              <p className="crm-text-sm crm-text-amber-100">
+                Nenhuma conta conectada. Abra o WhatsApp Web e faça login na barra lateral.
+              </p>
+            </div>
+          )}
 
           <label className="crm-block">
             <span className="crm-mb-2 crm-flex crm-items-center crm-gap-2 crm-text-xs crm-font-semibold crm-uppercase crm-tracking-[0.18em] crm-text-slate-400">
@@ -123,8 +142,19 @@ export function PopupApp() {
             disabled={loading}
             className="crm-w-full crm-rounded-2xl crm-border crm-border-accent-500/30 crm-bg-accent-500/12 crm-px-4 crm-py-3 crm-text-xs crm-font-semibold crm-uppercase crm-tracking-[0.2em] crm-text-accent-300 transition hover:crm-bg-accent-500/18 disabled:crm-opacity-50"
           >
-            {loading ? 'Conectando...' : 'Reconectar ao Backend Interno'}
+            {loading ? 'Conectando...' : 'Atualizar status'}
           </button>
+
+          {session?.token ? (
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              disabled={loading}
+              className="crm-w-full crm-rounded-2xl crm-border crm-border-rose-400/20 crm-bg-rose-400/8 crm-px-4 crm-py-3 crm-text-xs crm-font-semibold crm-uppercase crm-tracking-[0.2em] crm-text-rose-300 transition hover:crm-bg-rose-400/14 disabled:crm-opacity-50"
+            >
+              {loading ? 'Saindo...' : 'Sair da conta'}
+            </button>
+          ) : null}
         </div>
       </div>
     </main>

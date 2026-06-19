@@ -28,41 +28,16 @@ interface ApiOptions {
   apiBaseUrl?: string;
 }
 
-async function activateInternalSession(apiBaseUrl: string): Promise<AuthSession> {
-  const response = await fetch(`${apiBaseUrl}/auth/internal-session`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message =
-      (payload && typeof payload.message === 'string' && payload.message) ||
-      `Request failed with status ${response.status}`;
-    throw new Error(message);
-  }
-
-  const result = payload as { accessToken: string; user?: AuthSession['user'] };
-  const session: AuthSession = {
-    apiBaseUrl,
-    token: result.accessToken,
-    user: result.user ?? null
-  };
-
-  await setStoredSession(session);
-  return session;
-}
+export const NOT_AUTHENTICATED = 'NOT_AUTHENTICATED';
 
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const session = await getStoredSession();
   const apiBaseUrl = options.apiBaseUrl ?? session.apiBaseUrl;
-  let token = options.token ?? session.token;
+  const token = options.token ?? session.token;
+  const isAuthRoute = path === '/auth/login' || path === '/auth/register';
 
-  if (!token && apiBaseUrl !== PREVIEW_API_BASE_URL && path !== '/auth/internal-session') {
-    const internalSession = await activateInternalSession(apiBaseUrl);
-    token = internalSession.token;
+  if (!token && apiBaseUrl !== PREVIEW_API_BASE_URL && !isAuthRoute) {
+    throw new Error(NOT_AUTHENTICATED);
   }
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -121,18 +96,18 @@ export async function getProfile(): Promise<AuthSession> {
     return getPreviewProfile();
   }
 
-  try {
-    const ensuredSession = session.token
-      ? session
-      : await activateInternalSession(session.apiBaseUrl);
+  if (!session.token) {
+    return session;
+  }
 
+  try {
     const profile = await request<{
       id: string;
       name: string;
       email: string;
     }>('/auth/me');
     const nextSession = {
-      ...ensuredSession,
+      ...session,
       user: profile
         ? {
             id: profile.id,
