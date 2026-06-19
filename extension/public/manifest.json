@@ -8,7 +8,7 @@
     "https://web.whatsapp.com/*",
     "http://localhost:3000/*",
     "http://127.0.0.1:3000/*",
-    "https://crm-api.aprovapm.com.br/*"
+    "https://crm.xceducacao.com.br/*"
   ],
   "background": {
     "service_worker": "assets/background.js",

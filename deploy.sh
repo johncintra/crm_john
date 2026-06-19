@@ -14,4 +14,4 @@ echo "==> Status dos containers CRM:"
 docker-compose -f docker-compose.prod.yml ps
 
 echo "==> Deploy concluído!"
-echo "    API disponível em: https://crm-api.aprovapm.com.br"
+echo "    API disponível em: https://crm.xceducacao.com.br"
