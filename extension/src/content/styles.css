@@ -1236,9 +1236,9 @@ body.crm-john-rail-open .crm-stagebar {
   flex: 1;
   height: 34px;
   border-radius: calc(var(--crm-radius) * 0.64);
-  background: oklch(var(--crm-primary) / 0.14);
-  border: 1px solid oklch(var(--crm-primary) / 0.25);
-  color: oklch(var(--crm-primary-hover));
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  color: #7dd3fc;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1249,8 +1249,8 @@ body.crm-john-rail-open .crm-stagebar {
 }
 
 .crm-funnel-card-btn-msg:hover {
-  background: oklch(var(--crm-primary) / 0.24);
-  color: oklch(var(--crm-foreground));
+  background: rgba(14, 165, 233, 0.22);
+  color: #bae6fd;
 }
 
 /* Template quick-send button */
