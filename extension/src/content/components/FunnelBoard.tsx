@@ -31,6 +31,13 @@ export interface FunnelCard {
   } | null;
 }
 
+export interface PinnedCardColumn {
+  id: string;
+  title: string;
+  color: string;
+  cards: FunnelCard[];
+}
+
 interface FunnelBoardProps {
   funnelName: string;
   funnels: Array<{ id: string; name: string }>;
@@ -38,12 +45,14 @@ interface FunnelBoardProps {
   conversations: WhatsAppConversationItem[];
   columns: FunnelColumn[];
   cards: FunnelCard[];
+  pinnedCardColumns?: PinnedCardColumn[];
   onSelectFunnel: (funnelId: string) => void;
   onCreateFunnel: () => void;
   onConfigureFunnel: () => void;
   onCopyEmail?: (email: string) => void;
   onOpenConversation: (conversation: { name: string; phone: string | null; normalizedPhone?: string | null; leadId?: string }) => void | Promise<void>;
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void | Promise<void>;
+  onAssignPinnedCard?: (card: FunnelCard, columnId: string) => void | Promise<void>;
   onMoveCard: (cardId: string, columnId: string) => void;
   onRemoveCard: (cardId: string) => void;
   onCreateColumn: (payload: { name: string; color: string }) => void;
@@ -114,12 +123,14 @@ export function FunnelBoard({
   conversations,
   columns,
   cards,
+  pinnedCardColumns = [],
   onSelectFunnel,
   onCreateFunnel,
   onConfigureFunnel,
   onCopyEmail,
   onOpenConversation,
   onAssignConversation,
+  onAssignPinnedCard,
   onMoveCard,
   onRemoveCard,
   onCreateColumn,
@@ -135,6 +146,7 @@ export function FunnelBoard({
   const [search, setSearch] = useState('');
   const [draggedConversation, setDraggedConversation] = useState<WhatsAppConversationItem | null>(null);
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
+  const [draggedPinnedCard, setDraggedPinnedCard] = useState<FunnelCard | null>(null);
   const [draggedColumnId, setDraggedColumnId] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(null);
   const [formName, setFormName] = useState('');
@@ -153,14 +165,136 @@ export function FunnelBoard({
     });
   }, [conversations, normalizedSearch]);
 
-  const filteredCards = useMemo(() => {
-    if (!normalizedSearch) return cards;
-    return cards.filter((card) => {
-      const tagsText = (card.tags ?? []).map((tag) => tag.name).join(' ');
-      const text = `${card.name} ${card.email ?? ''} ${card.phone ?? ''} ${tagsText}`.toLowerCase();
-      return text.includes(normalizedSearch);
-    });
-  }, [cards, normalizedSearch]);
+  const matchesSearch = (card: FunnelCard) => {
+    if (!normalizedSearch) return true;
+    const tagsText = (card.tags ?? []).map((tag) => tag.name).join(' ');
+    const text = `${card.name} ${card.email ?? ''} ${card.phone ?? ''} ${tagsText}`.toLowerCase();
+    return text.includes(normalizedSearch);
+  };
+
+  const filteredCards = useMemo(() => cards.filter(matchesSearch), [cards, normalizedSearch]);
+
+  const filteredPinnedColumns = useMemo(
+    () => pinnedCardColumns.map((column) => ({ ...column, cards: column.cards.filter(matchesSearch) })),
+    [pinnedCardColumns, normalizedSearch]
+  );
+
+  const renderCard = (
+    card: FunnelCard,
+    columnColor: string,
+    options: { draggable: boolean; allowRemove: boolean; onDragStart: () => void }
+  ) => {
+    const statusColor = getOrderStatusColor(card.latestOrder?.status);
+
+    return (
+      <article
+        key={card.id}
+        className="crm-funnel-card"
+        draggable={options.draggable}
+        onDragStart={options.onDragStart}
+        onDragEnd={() => { setDraggedCardId(null); setDraggedPinnedCard(null); }}
+      >
+        {/* Colored status bar at top */}
+        <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
+        {/* Stage-colored side bar (wacrm-style) */}
+        <div className="crm-funnel-card-side-bar" style={{ background: columnColor }} />
+
+        <div className="crm-funnel-card-top">
+          <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
+          <div className="crm-min-w-0 crm-funnel-card-main">
+            <div className="crm-funnel-card-name-row">
+              <h3 className="crm-funnel-card-name">{card.name}</h3>
+              {!compactCheckoutCards ? <TemperatureBadge temperature={card.temperature} /> : null}
+            </div>
+
+            {card.email ? (
+              <div className="crm-funnel-card-email-row">
+                <p className="crm-funnel-card-email">{card.email}</p>
+                {onCopyEmail ? (
+                  <button
+                    type="button"
+                    className="crm-funnel-card-email-copy"
+                    title="Copiar email"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onCopyEmail(card.email!);
+                    }}
+                  >
+                    <Copy className="crm-h-3 crm-w-3" />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Amount — always visible on checkout-sourced cards */}
+            {card.latestOrder ? (
+              <p className="crm-funnel-card-amount">
+                {formatCurrency(card.latestOrder.amount, card.latestOrder.currency)}
+                {card.latestOrder.productName ? (
+                  <span className="crm-funnel-card-amount-product"> · {card.latestOrder.productName}</span>
+                ) : null}
+              </p>
+            ) : null}
+
+            {/* Product + source for non-checkout */}
+            {!compactCheckoutCards && !card.latestOrder && card.source ? (
+              <p className="crm-funnel-card-meta">{card.source}</p>
+            ) : null}
+
+            {card.tags?.length ? (
+              <div className="crm-funnel-card-tags">
+                {card.tags.map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="crm-funnel-card-tag"
+                    style={{
+                      borderColor: `${tag.color ?? '#334155'}55`,
+                      color: tag.color ?? '#cbd5e1'
+                    }}
+                  >
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {options.allowRemove ? (
+            <button
+              type="button"
+              className="crm-funnel-card-remove"
+              title="Remover contato"
+              onClick={() => {
+                const confirmed = window.confirm(`Deseja remover "${card.name}" desta etapa?`);
+                if (confirmed) onRemoveCard(card.id);
+              }}
+            >
+              <X className="crm-h-3.5 crm-w-3.5" />
+            </button>
+          ) : null}
+        </div>
+
+        {/* Action buttons */}
+        <div className="crm-funnel-card-actions">
+          <button
+            type="button"
+            className="crm-funnel-card-btn-msg"
+            draggable={false}
+            onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenConversation(card);
+            }}
+          >
+            <MessageCircle className="crm-h-3.5 crm-w-3.5" />
+            Mensagem
+          </button>
+        </div>
+      </article>
+    );
+  };
 
   const openCreateModal = () => {
     setFormName('');
@@ -326,6 +460,38 @@ export function FunnelBoard({
               </div>
             ) : null}
 
+            {/* Pinned checkout-sourced columns (Oportunidades, Compra Aprovada) */}
+            {filteredPinnedColumns.map((pinnedColumn) => (
+              <div
+                key={pinnedColumn.id}
+                className="crm-funnel-column crm-funnel-column-recent"
+                style={{ borderTopColor: pinnedColumn.color }}
+              >
+                <div className="crm-funnel-column-head">
+                  <div className="crm-funnel-column-title-wrap">
+                    <span className="crm-funnel-dot" style={{ backgroundColor: pinnedColumn.color }} />
+                    <strong>{pinnedColumn.title}</strong>
+                  </div>
+                  <span className="crm-funnel-count">{pinnedColumn.cards.length}</span>
+                </div>
+                <div className="crm-funnel-list crm-scrollbar">
+                  {pinnedColumn.cards.length ? (
+                    pinnedColumn.cards.map((card) =>
+                      renderCard(card, pinnedColumn.color, {
+                        draggable: true,
+                        allowRemove: false,
+                        onDragStart: () => setDraggedPinnedCard(card)
+                      })
+                    )
+                  ) : (
+                    <div className="crm-funnel-empty">
+                      <p>Nenhum lead aqui</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
             {/* CRM columns */}
             {columns.map((column) => {
               const columnCards = filteredCards.filter((card) => card.columnId === column.id);
@@ -348,6 +514,10 @@ export function FunnelBoard({
                     if (draggedConversation) {
                       onAssignConversation(draggedConversation, column.id);
                       setDraggedConversation(null);
+                    }
+                    if (draggedPinnedCard && onAssignPinnedCard) {
+                      void onAssignPinnedCard(draggedPinnedCard, column.id);
+                      setDraggedPinnedCard(null);
                     }
                     if (draggedCardId && !compactCheckoutCards) {
                       onMoveCard(draggedCardId, column.id);
@@ -397,123 +567,13 @@ export function FunnelBoard({
 
                   <div className="crm-funnel-list crm-scrollbar">
                     {columnCards.length ? (
-                      columnCards.map((card) => {
-                        const statusColor = getOrderStatusColor(card.latestOrder?.status);
-
-                        return (
-                          <article
-                            key={card.id}
-                            className="crm-funnel-card"
-                            draggable={!compactCheckoutCards}
-                            onDragStart={() => { if (!compactCheckoutCards) setDraggedCardId(card.id); }}
-                            onDragEnd={() => setDraggedCardId(null)}
-                          >
-                            {/* Colored status bar at top */}
-                            <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
-                            {/* Stage-colored side bar (wacrm-style) */}
-                            <div className="crm-funnel-card-side-bar" style={{ background: column.color }} />
-
-                            <div className="crm-funnel-card-top">
-                              <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
-                              <div className="crm-min-w-0 crm-funnel-card-main">
-                                <div className="crm-funnel-card-name-row">
-                                  <h3 className="crm-funnel-card-name">{card.name}</h3>
-                                  {!compactCheckoutCards ? <TemperatureBadge temperature={card.temperature} /> : null}
-                                </div>
-
-                                {card.email ? (
-                                  <div className="crm-funnel-card-email-row">
-                                    <p className="crm-funnel-card-email">{card.email}</p>
-                                    {onCopyEmail ? (
-                                      <button
-                                        type="button"
-                                        className="crm-funnel-card-email-copy"
-                                        title="Copiar email"
-                                        onClick={(event) => {
-                                          event.preventDefault();
-                                          event.stopPropagation();
-                                          onCopyEmail(card.email!);
-                                        }}
-                                      >
-                                        <Copy className="crm-h-3 crm-w-3" />
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                ) : null}
-
-                                {/* Amount — always visible on checkout cards */}
-                                {compactCheckoutCards && card.latestOrder ? (
-                                  <p className="crm-funnel-card-amount">
-                                    {formatCurrency(card.latestOrder.amount, card.latestOrder.currency)}
-                                    {card.latestOrder.productName ? (
-                                      <span className="crm-funnel-card-amount-product"> · {card.latestOrder.productName}</span>
-                                    ) : null}
-                                  </p>
-                                ) : null}
-
-                                {/* Product + source for non-checkout */}
-                                {!compactCheckoutCards && card.latestOrder?.productName ? (
-                                  <p className="crm-funnel-card-meta">{card.latestOrder.productName}</p>
-                                ) : null}
-                                {!compactCheckoutCards && card.source ? (
-                                  <p className="crm-funnel-card-meta">{card.source}</p>
-                                ) : null}
-
-                                {card.tags?.length ? (
-                                  <div className="crm-funnel-card-tags">
-                                    {card.tags.map((tag) => (
-                                      <span
-                                        key={tag.id}
-                                        className="crm-funnel-card-tag"
-                                        style={{
-                                          borderColor: `${tag.color ?? '#334155'}55`,
-                                          color: tag.color ?? '#cbd5e1'
-                                        }}
-                                      >
-                                        {tag.name}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-                              </div>
-
-                              {allowColumnManagement ? (
-                                <button
-                                  type="button"
-                                  className="crm-funnel-card-remove"
-                                  title="Remover contato"
-                                  onClick={() => {
-                                    const confirmed = window.confirm(
-                                      `Deseja remover "${card.name}" desta etapa?`
-                                    );
-                                    if (confirmed) onRemoveCard(card.id);
-                                  }}
-                                >
-                                  <X className="crm-h-3.5 crm-w-3.5" />
-                                </button>
-                              ) : null}
-                            </div>
-
-                            {/* Action buttons */}
-                            <div className="crm-funnel-card-actions">
-                              <button
-                                type="button"
-                                className="crm-funnel-card-btn-msg"
-                                draggable={false}
-                                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                                onClick={(event) => {
-                                  event.preventDefault();
-                                  event.stopPropagation();
-                                  onOpenConversation(card);
-                                }}
-                              >
-                                <MessageCircle className="crm-h-3.5 crm-w-3.5" />
-                                Mensagem
-                              </button>
-                            </div>
-                          </article>
-                        );
-                      })
+                      columnCards.map((card) =>
+                        renderCard(card, column.color, {
+                          draggable: !compactCheckoutCards,
+                          allowRemove: allowColumnManagement,
+                          onDragStart: () => { if (!compactCheckoutCards) setDraggedCardId(card.id); }
+                        })
+                      )
                     ) : (
                       <div className="crm-funnel-empty">
                         <p>Arraste contatos aqui</p>

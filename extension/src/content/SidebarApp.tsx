@@ -20,7 +20,8 @@ import type { AuthSession, CheckoutBoardData, LeadContext, RemoteLeadMessage } f
 import {
   FunnelBoard,
   type FunnelCard,
-  type FunnelColumn
+  type FunnelColumn,
+  type PinnedCardColumn
 } from './components/FunnelBoard';
 import { LoginScreen } from './components/LoginScreen';
 import { MessageHistoryPanel } from './components/MessageHistoryPanel';
@@ -104,6 +105,20 @@ export function SidebarApp() {
       latestOrder: card.latestOrder
     }));
   }, [checkoutBoard?.cards, checkoutColumns]);
+
+  // Pinned columns shown inside every regular CRM funnel — checkout leads
+  // the seller can drag into their own stages without ever leaving the
+  // checkout pipeline's own records (assign is pipeline-scoped, see
+  // assignContactToStage on the backend).
+  const pinnedFunnelColumns = useMemo<PinnedCardColumn[]>(() => {
+    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED');
+    const opportunities = checkoutCards.filter((card) => card.latestOrder?.status !== 'APPROVED');
+
+    return [
+      { id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: opportunities },
+      { id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: approved }
+    ];
+  }, [checkoutCards]);
 
   const allFunnels = useMemo(() => {
     return [
@@ -328,7 +343,11 @@ export function SidebarApp() {
   }, [loadCheckoutBoard, selectedFunnelId]);
 
   useEffect(() => {
-    if (workspaceView !== 'general' || selectedFunnelId !== CHECKOUT_FUNNEL_ID) {
+    // Keep checkout data fresh while viewing any funnel in the general
+    // board, not just the checkout funnel itself — the pinned
+    // "Oportunidades"/"Compra Aprovada" columns on regular funnels depend
+    // on it too.
+    if (workspaceView !== 'general') {
       return;
     }
 
@@ -337,7 +356,7 @@ export function SidebarApp() {
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [loadCheckoutBoard, selectedFunnelId, workspaceView]);
+  }, [loadCheckoutBoard, workspaceView]);
 
   const loadFunnels = useCallback(async () => {
     try {
@@ -663,6 +682,50 @@ export function SidebarApp() {
     setToast('Lead enviado para a etapa.');
   };
 
+  // Drag-assign from the pinned "Oportunidades"/"Compra Aprovada" columns
+  // (checkout-sourced cards) into a stage of the currently selected regular
+  // funnel. Always has a real phone already (checkout requires it), so —
+  // unlike handleAssignConversation — there's no need to open WhatsApp to
+  // capture it first. The checkout pipeline's own lead record is untouched
+  // (assignContactToStage is scoped to the destination pipeline).
+  const handleAssignPinnedCard = async (pinnedCard: FunnelCard, columnId: string) => {
+    if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
+    const tempId = `card-${Date.now()}-${pinnedCard.id}`;
+    const phone = pinnedCard.phone;
+
+    setFunnels((prev) => prev.map((f) => {
+      if (f.id !== selectedLocalFunnel.id) return f;
+      const existing = f.cards.find((c) => (c.phone && phone && normalizePhone(c.phone) === normalizePhone(phone)) || c.name === pinnedCard.name);
+      if (existing) {
+        return {
+          ...f,
+          cards: f.cards.map((c) =>
+            c.id === existing.id
+              ? { ...c, columnId, name: pinnedCard.name, phone, email: pinnedCard.email, normalizedPhone: phone ? normalizePhone(phone) : c.normalizedPhone, avatarUrl: pinnedCard.avatarUrl }
+              : c
+          )
+        };
+      }
+      return {
+        ...f,
+        cards: [...f.cards, { id: tempId, name: pinnedCard.name, phone, email: pinnedCard.email, normalizedPhone: phone ? normalizePhone(phone) : null, avatarUrl: pinnedCard.avatarUrl, columnId }]
+      };
+    }));
+    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: pinnedCard.name, phone } })
+      .then((card) => {
+        setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : {
+          ...f,
+          cards: f.cards.map((c) =>
+            c.id === tempId || c.name === pinnedCard.name
+              ? { ...c, id: card.id, leadId: card.leadId }
+              : c
+          )
+        }));
+      })
+      .catch(() => setToast('Erro ao salvar contato no servidor.'));
+    setToast('Lead enviado para a etapa.');
+  };
+
   const handleMoveCard = async (cardId: string, columnId: string) => {
     if (isCheckoutFunnelSelected) {
       const checkoutCard = checkoutCards.find(
@@ -876,12 +939,14 @@ export function SidebarApp() {
           conversations={conversations}
           columns={boardColumns}
           cards={boardCards}
+          pinnedCardColumns={!isCheckoutFunnelSelected ? pinnedFunnelColumns : undefined}
           onSelectFunnel={setSelectedFunnelId}
           onCreateFunnel={handleCreateFunnel}
           onConfigureFunnel={handleConfigureFunnel}
           onCopyEmail={handleCopyEmail}
           onOpenConversation={handleOpenConversation}
           onAssignConversation={handleAssignConversation}
+          onAssignPinnedCard={handleAssignPinnedCard}
           onMoveCard={(cardId, columnId) => {
             void handleMoveCard(cardId, columnId);
           }}
@@ -896,7 +961,7 @@ export function SidebarApp() {
             }
             setWorkspaceView('funnel');
           }}
-          showRecentConversations={!isCheckoutFunnelSelected}
+          showRecentConversations={false}
           allowColumnManagement={!isCheckoutFunnelSelected}
           allowCreateStages={!isCheckoutFunnelSelected}
           compactCheckoutCards={isCheckoutFunnelSelected}
