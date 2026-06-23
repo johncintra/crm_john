@@ -584,19 +584,6 @@ export function SidebarApp() {
       });
     }
 
-    if (opened && leadId) {
-      try {
-        const history = await sendMessage<RemoteLeadMessage[]>({
-          type: 'lead:fetch-messages',
-          payload: { leadId, hours: 24 }
-        });
-        setMessageHistoryLeadName(name);
-        setMessageHistory(history);
-      } catch {
-        // non-critical — history is a bonus on top of opening the conversation
-      }
-    }
-
     if (!opened) {
       setToast(
         finalPhone
