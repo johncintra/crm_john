@@ -465,13 +465,17 @@ export class CrmService {
 
     const result = await this.prisma.$transaction(async (tx) => {
       const tagRegistry = await this.loadCheckoutTags(tx, workspace.id);
+      // Scoped to the checkout pipeline only — a phone/email match against a
+      // lead the seller is managing in a regular CRM funnel must never pull
+      // that lead into the checkout funnel just because they bought
+      // something.
       const existingLead =
         (await tx.lead.findFirst({
-          where: { workspaceId: workspace.id, normalizedPhone }
+          where: { workspaceId: workspace.id, pipelineId: checkoutPipeline.id, normalizedPhone }
         })) ??
         (normalizedEmail
           ? await tx.lead.findFirst({
-              where: { workspaceId: workspace.id, email: normalizedEmail }
+              where: { workspaceId: workspace.id, pipelineId: checkoutPipeline.id, email: normalizedEmail }
             })
           : null);
 
