@@ -512,7 +512,11 @@ export function SidebarApp() {
     let conversationMatch = matchedConversation;
     const resolvedPhone = phone ?? normalizedPhone ?? matchedConversation?.phone ?? null;
 
-    if (resolvedPhone && !conversationMatch) {
+    // Checkout leads are freshly-bought customers who essentially never
+    // have prior chat history on this number — the full scan below would
+    // never find them, so skip its ~7s scroll-through-everything cost and
+    // go straight to the reliable phone-deep-link fallback further down.
+    if (resolvedPhone && !conversationMatch && !isCheckoutFunnelSelected) {
       const allConversations = await getAllWhatsAppConversationList();
       conversationMatch =
         allConversations.find(
