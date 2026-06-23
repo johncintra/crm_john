@@ -19,7 +19,7 @@ export const demoLeadContext: LeadContext = {
     currentStage: {
       id: 'stage-approved',
       name: 'Compra Aprovada',
-      color: '#3dd9b5'
+      color: '#7c3aed'
     },
     latestOrder: {
       id: 'demo-order-1',
@@ -29,7 +29,7 @@ export const demoLeadContext: LeadContext = {
       status: 'APPROVED'
     },
     tags: [
-      { id: 'tag-1', name: 'Lead Quente', color: '#3dd9b5' },
+      { id: 'tag-1', name: 'Lead Quente', color: '#7c3aed' },
       { id: 'tag-2', name: 'Pix', color: '#38bdf8' },
       { id: 'tag-3', name: 'Recuperado', color: '#f59e0b' }
     ]
@@ -44,7 +44,7 @@ export const demoLeadContext: LeadContext = {
       { id: 'stage-declined', name: 'Cartão Recusado', position: 4, color: '#fb7185' },
       { id: 'stage-service', name: 'Em Atendimento', position: 5, color: '#c084fc' },
       { id: 'stage-recovered', name: 'Recuperado', position: 6, color: '#22c55e' },
-      { id: 'stage-approved', name: 'Compra Aprovada', position: 7, color: '#3dd9b5' },
+      { id: 'stage-approved', name: 'Compra Aprovada', position: 7, color: '#7c3aed' },
       { id: 'stage-lost', name: 'Perdido', position: 8, color: '#94a3b8' }
     ]
   },

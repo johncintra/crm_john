@@ -408,6 +408,8 @@ export function FunnelBoard({
                           >
                             {/* Colored status bar at top */}
                             <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
+                            {/* Stage-colored side bar (wacrm-style) */}
+                            <div className="crm-funnel-card-side-bar" style={{ background: column.color }} />
 
                             <div className="crm-funnel-card-top">
                               <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />

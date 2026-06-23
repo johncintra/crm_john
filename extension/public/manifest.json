@@ -24,5 +24,11 @@
       "css": ["assets/content.css"],
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["fonts/*"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
   ]
 }

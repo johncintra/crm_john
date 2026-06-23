@@ -32,7 +32,7 @@ export function PipelineCard({ pipeline, currentStageId, onMove }: PipelineCardP
             <div className="crm-flex crm-items-center crm-gap-3">
               <span
                 className="crm-h-2.5 crm-w-2.5 crm-rounded-full"
-                style={{ backgroundColor: stage.color ?? '#3dd9b5' }}
+                style={{ backgroundColor: stage.color ?? 'oklch(0.526 0.247 293)' }}
               />
               <span className="crm-text-sm crm-font-medium crm-text-white">{stage.name}</span>
             </div>
