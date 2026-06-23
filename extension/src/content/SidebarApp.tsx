@@ -13,11 +13,10 @@ import {
   getOpenConversationMessages,
   getRealContactPhoneNumber,
   getSelectedConversationFromList,
-  insertTextIntoWhatsAppComposer,
   openConversationByPhoneNumber,
   openConversationInWhatsApp
 } from './whatsapp';
-import type { AuthSession, CheckoutBoardData, LeadContext, MessageTemplate, RemoteLeadMessage } from '../shared/types';
+import type { AuthSession, CheckoutBoardData, LeadContext, RemoteLeadMessage } from '../shared/types';
 import {
   FunnelBoard,
   type FunnelCard,
@@ -63,7 +62,6 @@ export function SidebarApp() {
   const [selectedFunnelId, setSelectedFunnelId] = useState<string>('');
   const [funnelsLoaded, setFunnelsLoaded] = useState(false);
   const [checkoutBoard, setCheckoutBoard] = useState<CheckoutBoardData | null>(null);
-  const [workspaceTemplates, setWorkspaceTemplates] = useState<MessageTemplate[]>([]);
   const [messageHistory, setMessageHistory] = useState<RemoteLeadMessage[] | null>(null);
   const [messageHistoryLeadName, setMessageHistoryLeadName] = useState('');
   const isCheckoutFunnelSelected = selectedFunnelId === CHECKOUT_FUNNEL_ID;
@@ -225,17 +223,6 @@ export function SidebarApp() {
     }
   }, [sendMessage]);
 
-  const loadWorkspaceTemplates = useCallback(async () => {
-    try {
-      const data = await sendMessage<MessageTemplate[]>({ type: 'workspace:fetch-templates' });
-      if (Array.isArray(data) && data.length) {
-        setWorkspaceTemplates(data);
-      }
-    } catch {
-      // non-critical — templates will be missing but everything else works
-    }
-  }, [sendMessage]);
-
   const refreshLeadContext = useCallback(async () => {
     if (!conversation.phone) {
       setContext(demoLeadContext);
@@ -333,11 +320,6 @@ export function SidebarApp() {
     if (!isAuthenticated) return;
     void loadCheckoutBoard();
   }, [loadCheckoutBoard, isAuthenticated]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    void loadWorkspaceTemplates();
-  }, [loadWorkspaceTemplates, isAuthenticated]);
 
   useEffect(() => {
     if (selectedFunnelId === CHECKOUT_FUNNEL_ID) {
@@ -591,31 +573,6 @@ export function SidebarApp() {
           : 'Telefone real desse contato ainda nao foi capturado. Abra a conversa com ele no numero original para habilitar.'
       );
     }
-  };
-
-  const handleSendTemplate = async (card: FunnelCard, columnName: string) => {
-    const n = columnName.trim().toLowerCase();
-    let category: MessageTemplate['category'] = 'GENERAL';
-    if (n.includes('pix') || n.includes('boleto')) category = 'PIX_PENDING';
-    else if (n.includes('recusad')) category = 'CREDIT_CARD_DECLINED';
-    else if (n.includes('aprovad')) category = 'PURCHASE_APPROVED';
-
-    const template =
-      workspaceTemplates.find((t) => t.category === category) ??
-      workspaceTemplates.find((t) => t.category === 'GENERAL') ??
-      workspaceTemplates[0] ??
-      null;
-
-    await handleOpenConversation(card);
-
-    if (!template) {
-      setToast('Nenhum template encontrado para essa etapa.');
-      return;
-    }
-
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 700));
-    const inserted = insertTextIntoWhatsAppComposer(template.content);
-    setToast(inserted ? `Template "${template.title}" inserido.` : 'Conversa aberta.');
   };
 
   const handleCopyEmail = async (email: string) => {
@@ -939,12 +896,6 @@ export function SidebarApp() {
           allowColumnManagement={!isCheckoutFunnelSelected}
           allowCreateStages={!isCheckoutFunnelSelected}
           compactCheckoutCards={isCheckoutFunnelSelected}
-          templates={isCheckoutFunnelSelected ? workspaceTemplates : undefined}
-          onSendTemplate={
-            isCheckoutFunnelSelected
-              ? (card, columnName) => { void handleSendTemplate(card, columnName); }
-              : undefined
-          }
         />
       ) : null}
 

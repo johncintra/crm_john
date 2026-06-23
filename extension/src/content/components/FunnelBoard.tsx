@@ -1,7 +1,6 @@
-import { Copy, MessageCircle, Plus, SendHorizonal, Settings, X } from 'lucide-react';
+import { Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
-import type { MessageTemplate } from '../../shared/types';
 import type { WhatsAppConversationItem } from '../whatsapp';
 
 export interface FunnelColumn {
@@ -56,8 +55,6 @@ interface FunnelBoardProps {
   allowColumnManagement?: boolean;
   allowCreateStages?: boolean;
   compactCheckoutCards?: boolean;
-  templates?: MessageTemplate[];
-  onSendTemplate?: (card: FunnelCard, columnName: string) => void;
 }
 
 type ModalState =
@@ -133,8 +130,7 @@ export function FunnelBoard({
   showRecentConversations = true,
   allowColumnManagement = true,
   allowCreateStages = true,
-  compactCheckoutCards = false,
-  onSendTemplate
+  compactCheckoutCards = false
 }: FunnelBoardProps) {
   const [search, setSearch] = useState('');
   const [draggedConversation, setDraggedConversation] = useState<WhatsAppConversationItem | null>(null);
@@ -333,6 +329,9 @@ export function FunnelBoard({
             {/* CRM columns */}
             {columns.map((column) => {
               const columnCards = filteredCards.filter((card) => card.columnId === column.id);
+              const columnTotal = compactCheckoutCards
+                ? columnCards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0)
+                : 0;
 
               return (
                 <div
@@ -350,7 +349,7 @@ export function FunnelBoard({
                       onAssignConversation(draggedConversation, column.id);
                       setDraggedConversation(null);
                     }
-                    if (draggedCardId) {
+                    if (draggedCardId && !compactCheckoutCards) {
                       onMoveCard(draggedCardId, column.id);
                       setDraggedCardId(null);
                     }
@@ -377,6 +376,9 @@ export function FunnelBoard({
                       </button>
                       <span className="crm-funnel-dot" style={{ backgroundColor: column.color, boxShadow: `0 0 6px ${column.color}80` }} />
                       <strong>{column.name}</strong>
+                      {compactCheckoutCards && columnTotal > 0 ? (
+                        <span className="crm-funnel-column-total">{formatCurrency(columnTotal, columnCards[0]?.latestOrder?.currency ?? 'BRL')}</span>
+                      ) : null}
                     </div>
                     <div className="crm-funnel-column-tools">
                       <span className="crm-funnel-count">{columnCards.length}</span>
@@ -402,8 +404,8 @@ export function FunnelBoard({
                           <article
                             key={card.id}
                             className="crm-funnel-card"
-                            draggable
-                            onDragStart={() => setDraggedCardId(card.id)}
+                            draggable={!compactCheckoutCards}
+                            onDragStart={() => { if (!compactCheckoutCards) setDraggedCardId(card.id); }}
                             onDragEnd={() => setDraggedCardId(null)}
                           >
                             {/* Colored status bar at top */}
@@ -416,7 +418,7 @@ export function FunnelBoard({
                               <div className="crm-min-w-0 crm-funnel-card-main">
                                 <div className="crm-funnel-card-name-row">
                                   <h3 className="crm-funnel-card-name">{card.name}</h3>
-                                  <TemperatureBadge temperature={card.temperature} />
+                                  {!compactCheckoutCards ? <TemperatureBadge temperature={card.temperature} /> : null}
                                 </div>
 
                                 {card.email ? (
@@ -508,22 +510,6 @@ export function FunnelBoard({
                                 <MessageCircle className="crm-h-3.5 crm-w-3.5" />
                                 Mensagem
                               </button>
-                              {compactCheckoutCards && onSendTemplate ? (
-                                <button
-                                  type="button"
-                                  className="crm-funnel-card-btn-tpl"
-                                  draggable={false}
-                                  title={`Enviar template para etapa ${column.name}`}
-                                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                                  onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    onSendTemplate(card, column.name);
-                                  }}
-                                >
-                                  <SendHorizonal className="crm-h-3.5 crm-w-3.5" />
-                                </button>
-                              ) : null}
                             </div>
                           </article>
                         );

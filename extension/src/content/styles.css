@@ -683,6 +683,17 @@ body.crm-john-rail-open .crm-stagebar {
   background: #22c55e;
 }
 
+.crm-funnel-column-total {
+  margin-left: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: oklch(var(--crm-muted) / 0.6);
+  color: #4ade80;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .crm-funnel-list {
   display: flex;
   flex-direction: column;

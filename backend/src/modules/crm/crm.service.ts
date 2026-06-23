@@ -604,22 +604,25 @@ export class CrmService {
         undefined,
       cpf:
         this.extractString(payload, ['customer.document', 'customer.cpf', 'buyer.document']) ??
-        this.extractString(payload, ['Customer.document']) ??
+        this.extractString(payload, ['Customer.document', 'Customer.CPF']) ??
         undefined,
       source: 'Kiwify Checkout',
       productName:
         this.extractString(payload, ['product.name', 'offer.title', 'order.bump_name']) ??
-        this.extractString(payload, ['Product.name']) ??
+        this.extractString(payload, ['Product.name', 'Product.product_name']) ??
         'Produto Kiwify',
       amount: this.extractAmount(
         this.extractNumberLike(payload, [
           'commissionable_total_price',
           'order.total',
           'order.amount',
-          'price'
+          'price',
+          'Commissions.charge_amount',
+          'Commissions.product_base_price'
         ])
       ),
-      currency: this.extractString(payload, ['currency', 'order.currency']) ?? 'BRL',
+      currency:
+        this.extractString(payload, ['currency', 'order.currency', 'Commissions.currency']) ?? 'BRL',
       status: this.mapKiwifyStatus(
         this.extractString(payload, ['order_status', 'status', 'order.status']) ?? 'OPEN'
       ),
