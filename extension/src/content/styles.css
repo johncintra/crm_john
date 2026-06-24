@@ -406,7 +406,7 @@ body.crm-john-rail-open .crm-stagebar {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
   margin-bottom: 0;
   padding: 8px 12px;
