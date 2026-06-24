@@ -736,8 +736,14 @@ export class CrmService {
   }
 
   mapActiveCampaignWebhookPayload(payload: Record<string, unknown>): IngestCheckoutEventDto {
-    const phone =
+    const rawPhone =
       this.extractString(payload, ['phone', 'contact.phone', 'contact.phone_number']) ?? '';
+    // ActiveCampaign's contact.phone sends a bare national number (DDD +
+    // number, no country code) — Kiwify always sends the full +55, and the
+    // checkout pipeline dedups by this exact digit string, so a lead that
+    // later buys for real would silently fail to match and create a
+    // duplicate instead of moving to Compra Aprovada.
+    const phone = this.ensureBrazilianCountryCode(rawPhone);
 
     const firstName = this.extractString(payload, ['first_name', 'contact.first_name']);
     const lastName = this.extractString(payload, ['last_name', 'contact.last_name']);
@@ -1092,6 +1098,21 @@ export class CrmService {
 
     const digits = phone.replace(/\D/g, '');
     return digits.length >= 10 ? digits : null;
+  }
+
+  private ensureBrazilianCountryCode(phone: string): string {
+    const digits = phone.replace(/\D/g, '');
+    if (!digits) {
+      return phone;
+    }
+
+    // 10 (DDD + 8-digit landline) or 11 (DDD + 9-digit mobile) digits with
+    // no leading 55 is a bare national number missing the country code.
+    if (digits.length === 10 || digits.length === 11) {
+      return `55${digits}`;
+    }
+
+    return digits;
   }
 
   private async loadCheckoutTags(tx: Prisma.TransactionClient, workspaceId: string) {
