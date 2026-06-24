@@ -5,6 +5,8 @@ import type { WorkspaceTag } from '../../shared/types';
 import { TagPicker } from './TagPicker';
 import type { WhatsAppConversationItem } from '../whatsapp';
 
+const LOST_TAG_NAME = 'perdido';
+
 export interface FunnelColumn {
   id: string;
   name: string;
@@ -174,6 +176,13 @@ export function FunnelBoard({
   }, [conversations, normalizedSearch]);
 
   const matchesSearch = (card: FunnelCard) => {
+    // "Perdido" cards stay invisible everywhere until the seller clicks
+    // that exact tag filter — same idea as "aprovado" pinning into Compra
+    // Aprovada, but here there's no other column to show them in, so the
+    // tag filter row is the only way back to them.
+    const isLost = (card.tags ?? []).some((tag) => tag.name.trim().toLowerCase() === LOST_TAG_NAME);
+    if (isLost && normalizedSearch !== LOST_TAG_NAME) return false;
+
     if (!normalizedSearch) return true;
     const tagsText = (card.tags ?? []).map((tag) => tag.name).join(' ');
     const text = `${card.name} ${card.email ?? ''} ${card.phone ?? ''} ${tagsText}`.toLowerCase();
@@ -497,6 +506,33 @@ export function FunnelBoard({
               </button>
             </div>
           </div>
+
+          {/* Existing tags as one-click filters — clicking "perdido" is also
+              the only way to reveal leads hidden by that tag (see
+              matchesSearch below). */}
+          {availableTags.length ? (
+            <div className="crm-funnel-tag-filters">
+              {availableTags.map((tag) => {
+                const isActive = normalizedSearch === tag.name.trim().toLowerCase();
+                const tagColor = tag.color ?? '#334155';
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    className="crm-funnel-card-tag crm-funnel-tag-filter"
+                    style={
+                      isActive
+                        ? { borderColor: tagColor, backgroundColor: tagColor, color: '#0b1120' }
+                        : { borderColor: `${tagColor}55`, color: tagColor }
+                    }
+                    onClick={() => setSearch(isActive ? '' : tag.name)}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           {/* ── Columns ── */}
           <div ref={columnsRef} className="crm-funnel-columns crm-scrollbar">

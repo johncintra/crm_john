@@ -778,26 +778,12 @@ export function SidebarApp() {
   const handleAssignConversation = async (conversationItem: (typeof conversations)[number], columnId: string) => {
     if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
     const tempId = `card-${Date.now()}-${conversationItem.id}`;
-    let phone = conversationItem.phone;
-
-    if (!phone) {
-      // Capturing the real phone requires that contact's conversation to be
-      // the one currently open (the contact-info panel belongs to whatever
-      // chat is active). Open it first if it isn't already, instead of only
-      // capturing when the seller happened to already be looking at it.
-      const isAlreadyActive = currentConversationListItem?.id === conversationItem.id;
-      const opened = isAlreadyActive || (await openConversationInWhatsApp(conversationItem.phone ?? '', conversationItem.name));
-
-      if (opened) {
-        if (!isAlreadyActive) {
-          await new Promise((resolve) => window.setTimeout(resolve, 400));
-        }
-        phone = await getRealContactPhoneNumber();
-        if (phone) {
-          setToast(`Telefone capturado: ${phone}`);
-        }
-      }
-    }
+    // No automatic phone capture here — that required clicking open
+    // WhatsApp's own contact-info panel, which visibly flashed it open for
+    // the seller just to assign a stage. The card is created with whatever
+    // phone is already known (often none for a saved contact); the seller
+    // can add it later from the Card do Lead panel like any other field.
+    const phone = conversationItem.phone;
 
     setFunnels((prev) => prev.map((f) => {
       if (f.id !== selectedLocalFunnel.id) return f;
@@ -961,32 +947,7 @@ export function SidebarApp() {
     }
 
     if (activeConversationCard) {
-      if (!activeConversationCard.phone && activeConversationCard.leadId) {
-        const capturedPhone = await getRealContactPhoneNumber();
-        if (capturedPhone) {
-          const normalizedCapturedPhone = normalizePhone(capturedPhone);
-          setFunnels((previous) =>
-            previous.map((funnel) =>
-              funnel.id === selectedLocalFunnel.id
-                ? {
-                    ...funnel,
-                    cards: funnel.cards.map((card) =>
-                      card.id === activeConversationCard.id
-                        ? { ...card, phone: capturedPhone, normalizedPhone: normalizedCapturedPhone }
-                        : card
-                    )
-                  }
-                : funnel
-            )
-          );
-          void sendMessage({
-            type: 'lead:update-phone',
-            payload: { leadId: activeConversationCard.leadId, phone: capturedPhone }
-          }).catch(() => {});
-          setToast(`Telefone capturado: ${capturedPhone}`);
-        }
-      }
-
+      // No automatic phone capture here either — see handleAssignConversation.
       void handleMoveCard(activeConversationCard.id, columnId);
       return;
     }

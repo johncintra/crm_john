@@ -441,6 +441,19 @@ body.crm-john-rail-open .crm-stagebar {
   flex-wrap: wrap;
 }
 
+.crm-funnel-tag-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 28px 14px;
+}
+
+.crm-funnel-tag-filter {
+  cursor: pointer;
+  background: transparent;
+}
+
 .crm-funnel-select {
   min-width: 290px;
   height: 42px;

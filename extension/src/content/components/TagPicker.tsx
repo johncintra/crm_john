@@ -26,15 +26,12 @@ export function TagPicker({ availableTags, currentTagIds, onPick }: TagPickerPro
       if (popoverRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
       setOpen(false);
     };
-    const closeOnScroll = () => setOpen(false);
+    // Note: deliberately NOT closing on scroll — WhatsApp Web's own chat
+    // panes scroll/auto-adjust on their own (new messages, virtualization),
+    // which with a window-level capture listener closed this popover
+    // within milliseconds of opening it, before a click could land.
     document.addEventListener('mousedown', handleOutsideClick);
-    window.addEventListener('scroll', closeOnScroll, true);
-    window.addEventListener('resize', closeOnScroll);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      window.removeEventListener('scroll', closeOnScroll, true);
-      window.removeEventListener('resize', closeOnScroll);
-    };
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [open]);
 
   // Rendered in a portal at a JS-computed fixed position instead of a
