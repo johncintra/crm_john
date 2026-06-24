@@ -111,38 +111,43 @@ export function SidebarApp() {
   // checkout pipeline's own records (assign is pipeline-scoped, see
   // assignContactToStage on the backend).
   //
-  // "Oportunidades" hides any checkout lead already claimed into this
-  // funnel (matched by phone or email) so the same person doesn't show up
-  // twice once the seller has dragged them into a real stage. "Compra
-  // Aprovada" intentionally skips that filter — it's meant to always show
-  // every approved sale, even ones already being worked elsewhere.
+  // Both pinned columns hide any checkout lead already claimed into this
+  // funnel (matched by phone or email) so the same person never shows up
+  // twice — once approved, a lead the seller already pulled into a real
+  // stage stops appearing in "Compra Aprovada" too, not just in
+  // "Oportunidades".
+  const dedupeAgainstLocalFunnel = useCallback(
+    (sourceCards: FunnelCard[]) => {
+      const localCards = selectedLocalFunnel?.cards ?? [];
+      const claimedPhones = new Set(
+        localCards
+          .map((card) => card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null))
+          .filter((value): value is string => Boolean(value))
+      );
+      const claimedEmails = new Set(
+        localCards.map((card) => card.email?.trim().toLowerCase()).filter((value): value is string => Boolean(value))
+      );
+
+      return sourceCards.filter((card) => {
+        const phoneKey = card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null);
+        if (phoneKey && claimedPhones.has(phoneKey)) return false;
+        const emailKey = card.email?.trim().toLowerCase();
+        if (emailKey && claimedEmails.has(emailKey)) return false;
+        return true;
+      });
+    },
+    [selectedLocalFunnel]
+  );
+
   const pinnedOpportunityColumns = useMemo<PinnedCardColumn[]>(() => {
     const opportunities = checkoutCards.filter((card) => card.latestOrder?.status !== 'APPROVED');
-    const localCards = selectedLocalFunnel?.cards ?? [];
-    const claimedPhones = new Set(
-      localCards
-        .map((card) => card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null))
-        .filter((value): value is string => Boolean(value))
-    );
-    const claimedEmails = new Set(
-      localCards.map((card) => card.email?.trim().toLowerCase()).filter((value): value is string => Boolean(value))
-    );
-
-    const deduped = opportunities.filter((card) => {
-      const phoneKey = card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null);
-      if (phoneKey && claimedPhones.has(phoneKey)) return false;
-      const emailKey = card.email?.trim().toLowerCase();
-      if (emailKey && claimedEmails.has(emailKey)) return false;
-      return true;
-    });
-
-    return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: deduped }];
-  }, [checkoutCards, selectedLocalFunnel]);
+    return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: dedupeAgainstLocalFunnel(opportunities) }];
+  }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
   const pinnedApprovedColumns = useMemo<PinnedCardColumn[]>(() => {
     const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED');
-    return [{ id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: approved }];
-  }, [checkoutCards]);
+    return [{ id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: dedupeAgainstLocalFunnel(approved) }];
+  }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
   const allFunnels = useMemo(() => {
     return [
