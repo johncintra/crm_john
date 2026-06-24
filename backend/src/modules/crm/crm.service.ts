@@ -222,7 +222,11 @@ export class CrmService {
     await this.requireLead(workspaceId, leadId);
     const trimmedName = name.trim();
 
-    let tag = await this.prisma.leadTag.findFirst({ where: { workspaceId, name: trimmedName } });
+    // Case-insensitive match so picking "Recusado" doesn't create a
+    // duplicate of the existing "recusado" checkout tag.
+    let tag = await this.prisma.leadTag.findFirst({
+      where: { workspaceId, name: { equals: trimmedName, mode: 'insensitive' } }
+    });
     if (!tag) {
       tag = await this.prisma.leadTag.create({ data: { workspaceId, name: trimmedName, color: color ?? null } });
     }
