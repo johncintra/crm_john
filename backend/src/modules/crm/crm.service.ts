@@ -1036,7 +1036,7 @@ export class CrmService {
             currency: latestOrder.currency,
             status: latestOrder.status
           }
-        : null,
+        : this.buildLatestOrderSnapshot(lead),
       tags: lead.tags.map((item) => ({
         id: item.tag.id,
         name: item.tag.name,
