@@ -7,7 +7,6 @@ import { useWhatsAppConversationList } from './hooks/useWhatsAppConversationList
 import { copyToClipboard, formatCurrency, normalizePhone } from '../shared/utils';
 import { savePendingMessageHistory, takePendingMessageHistory } from '../shared/storage';
 import {
-  getAllWhatsAppConversationList,
   forceOpenConversationByPhoneNumber,
   getCurrentConversationAvatar,
   getOpenConversationMessages,
@@ -73,7 +72,7 @@ export function SidebarApp() {
   const [messageHistoryLeadName, setMessageHistoryLeadName] = useState('');
   const isCheckoutFunnelSelected = selectedFunnelId === CHECKOUT_FUNNEL_ID;
   const conversations = useWhatsAppConversationList({
-    scanAll: workspaceView === 'general' && !isCheckoutFunnelSelected
+    scanAll: workspaceView === 'general'
   });
 
   const selectedLocalFunnel = useMemo(() => {
@@ -606,23 +605,15 @@ export function SidebarApp() {
       }) ??
       null;
 
-    let conversationMatch = matchedConversation;
+    const conversationMatch = matchedConversation;
     const resolvedPhone = phone ?? normalizedPhone ?? matchedConversation?.phone ?? null;
 
-    // Checkout leads are freshly-bought customers who essentially never
-    // have prior chat history on this number — the full scan below would
-    // never find them, so skip its ~7s scroll-through-everything cost and
-    // go straight to the reliable phone-deep-link fallback further down.
-    if (resolvedPhone && !conversationMatch && !isCheckoutFunnelSelected) {
-      const allConversations = await getAllWhatsAppConversationList();
-      conversationMatch =
-        allConversations.find(
-          (item) => item.phone && normalizePhone(item.phone) === normalizePhone(resolvedPhone)
-        ) ??
-        allConversations.find((item) => item.name.trim().toLowerCase() === normalizedCardName) ??
-        null;
-    }
-
+    // No inline full scan here anymore — useWhatsAppConversationList already
+    // runs that exact scroll-through-everything scan once per session in the
+    // background (cached, survives reloads via sessionStorage) and merges it
+    // into `conversations`. Re-running it here on every click added up to
+    // ~7s of dead time before even attempting to open the chat, almost
+    // always for nothing since a genuinely new lead has no chat to find.
     const finalPhone = resolvedPhone ?? conversationMatch?.phone ?? null;
     const finalName = conversationMatch?.name ?? name;
 
