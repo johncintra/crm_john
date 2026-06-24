@@ -46,6 +46,7 @@ interface FunnelBoardProps {
   columns: FunnelColumn[];
   cards: FunnelCard[];
   pinnedCardColumns?: PinnedCardColumn[];
+  pinnedCardColumnsEnd?: PinnedCardColumn[];
   onSelectFunnel: (funnelId: string) => void;
   onCreateFunnel: () => void;
   onConfigureFunnel: () => void;
@@ -84,15 +85,6 @@ function getOrderStatusColor(status?: string | null): string {
   }
 }
 
-function TemperatureBadge({ temperature }: { temperature?: string | null }) {
-  if (!temperature) return null;
-  const t = temperature.toUpperCase();
-  if (t === 'HOT') return <span className="crm-funnel-card-temp crm-funnel-card-temp-hot">🔥 Quente</span>;
-  if (t === 'WARM') return <span className="crm-funnel-card-temp crm-funnel-card-temp-warm">⚡ Morno</span>;
-  if (t === 'COLD') return <span className="crm-funnel-card-temp crm-funnel-card-temp-cold">❄️ Frio</span>;
-  return null;
-}
-
 function FunnelAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | null }) {
   const [imageFailed, setImageFailed] = useState(false);
 
@@ -124,6 +116,7 @@ export function FunnelBoard({
   columns,
   cards,
   pinnedCardColumns = [],
+  pinnedCardColumnsEnd = [],
   onSelectFunnel,
   onCreateFunnel,
   onConfigureFunnel,
@@ -179,6 +172,11 @@ export function FunnelBoard({
     [pinnedCardColumns, normalizedSearch]
   );
 
+  const filteredPinnedColumnsEnd = useMemo(
+    () => pinnedCardColumnsEnd.map((column) => ({ ...column, cards: column.cards.filter(matchesSearch) })),
+    [pinnedCardColumnsEnd, normalizedSearch]
+  );
+
   const renderCard = (
     card: FunnelCard,
     columnColor: string,
@@ -204,30 +202,34 @@ export function FunnelBoard({
           <div className="crm-min-w-0 crm-funnel-card-main">
             <div className="crm-funnel-card-name-row">
               <h3 className="crm-funnel-card-name">{card.name}</h3>
-              {!compactCheckoutCards ? <TemperatureBadge temperature={card.temperature} /> : null}
             </div>
 
-            {card.email ? (
-              <div className="crm-funnel-card-email-row">
-                <p className="crm-funnel-card-email">{card.email}</p>
-                {onCopyEmail ? (
-                  <button
-                    type="button"
-                    className="crm-funnel-card-email-copy"
-                    title="Copiar email"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onCopyEmail(card.email!);
-                    }}
-                  >
-                    <Copy className="crm-h-3 crm-w-3" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+            {/* Email row — always rendered, "N/D" when missing, so every
+                card (checkout-sourced or added straight from a chat) uses
+                the same layout. */}
+            <div className="crm-funnel-card-email-row">
+              <p className={card.email ? 'crm-funnel-card-email' : 'crm-funnel-card-email crm-funnel-card-email-empty'}>
+                {card.email ?? 'E-mail: N/D'}
+              </p>
+              {card.email && onCopyEmail ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Copiar email"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onCopyEmail(card.email!);
+                  }}
+                >
+                  <Copy className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+            </div>
 
-            {/* Amount — always visible on checkout-sourced cards */}
+            {card.phone ? <p className="crm-funnel-card-phone">{card.phone}</p> : null}
+
+            {/* Amount — visible whenever the card carries order data (checkout-sourced) */}
             {card.latestOrder ? (
               <p className="crm-funnel-card-amount">
                 {formatCurrency(card.latestOrder.amount, card.latestOrder.currency)}
@@ -237,8 +239,7 @@ export function FunnelBoard({
               </p>
             ) : null}
 
-            {/* Product + source for non-checkout */}
-            {!compactCheckoutCards && !card.latestOrder && card.source ? (
+            {!card.latestOrder && card.source ? (
               <p className="crm-funnel-card-meta">{card.source}</p>
             ) : null}
 
@@ -293,6 +294,46 @@ export function FunnelBoard({
           </button>
         </div>
       </article>
+    );
+  };
+
+  const renderPinnedColumn = (pinnedColumn: PinnedCardColumn & { cards: FunnelCard[] }) => {
+    const columnTotal = pinnedColumn.cards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0);
+
+    return (
+      <div
+        key={pinnedColumn.id}
+        className="crm-funnel-column crm-funnel-column-recent"
+        style={{ borderTopColor: pinnedColumn.color }}
+      >
+        <div className="crm-funnel-column-head">
+          <div className="crm-funnel-column-title-wrap">
+            <span className="crm-funnel-dot" style={{ backgroundColor: pinnedColumn.color }} />
+            <strong>{pinnedColumn.title}</strong>
+            {columnTotal > 0 ? (
+              <span className="crm-funnel-column-total">
+                {formatCurrency(columnTotal, pinnedColumn.cards[0]?.latestOrder?.currency ?? 'BRL')}
+              </span>
+            ) : null}
+          </div>
+          <span className="crm-funnel-count">{pinnedColumn.cards.length}</span>
+        </div>
+        <div className="crm-funnel-list crm-scrollbar">
+          {pinnedColumn.cards.length ? (
+            pinnedColumn.cards.map((card) =>
+              renderCard(card, pinnedColumn.color, {
+                draggable: true,
+                allowRemove: false,
+                onDragStart: () => setDraggedPinnedCard(card)
+              })
+            )
+          ) : (
+            <div className="crm-funnel-empty">
+              <p>Nenhum lead aqui</p>
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -460,44 +501,13 @@ export function FunnelBoard({
               </div>
             ) : null}
 
-            {/* Pinned checkout-sourced columns (Oportunidades, Compra Aprovada) */}
-            {filteredPinnedColumns.map((pinnedColumn) => (
-              <div
-                key={pinnedColumn.id}
-                className="crm-funnel-column crm-funnel-column-recent"
-                style={{ borderTopColor: pinnedColumn.color }}
-              >
-                <div className="crm-funnel-column-head">
-                  <div className="crm-funnel-column-title-wrap">
-                    <span className="crm-funnel-dot" style={{ backgroundColor: pinnedColumn.color }} />
-                    <strong>{pinnedColumn.title}</strong>
-                  </div>
-                  <span className="crm-funnel-count">{pinnedColumn.cards.length}</span>
-                </div>
-                <div className="crm-funnel-list crm-scrollbar">
-                  {pinnedColumn.cards.length ? (
-                    pinnedColumn.cards.map((card) =>
-                      renderCard(card, pinnedColumn.color, {
-                        draggable: true,
-                        allowRemove: false,
-                        onDragStart: () => setDraggedPinnedCard(card)
-                      })
-                    )
-                  ) : (
-                    <div className="crm-funnel-empty">
-                      <p>Nenhum lead aqui</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+            {/* Pinned checkout-sourced columns shown first (e.g. Oportunidades) */}
+            {filteredPinnedColumns.map(renderPinnedColumn)}
 
             {/* CRM columns */}
             {columns.map((column) => {
               const columnCards = filteredCards.filter((card) => card.columnId === column.id);
-              const columnTotal = compactCheckoutCards
-                ? columnCards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0)
-                : 0;
+              const columnTotal = columnCards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0);
 
               return (
                 <div
@@ -546,7 +556,7 @@ export function FunnelBoard({
                       </button>
                       <span className="crm-funnel-dot" style={{ backgroundColor: column.color, boxShadow: `0 0 6px ${column.color}80` }} />
                       <strong>{column.name}</strong>
-                      {compactCheckoutCards && columnTotal > 0 ? (
+                      {columnTotal > 0 ? (
                         <span className="crm-funnel-column-total">{formatCurrency(columnTotal, columnCards[0]?.latestOrder?.currency ?? 'BRL')}</span>
                       ) : null}
                     </div>
@@ -583,6 +593,9 @@ export function FunnelBoard({
                 </div>
               );
             })}
+
+            {/* Pinned checkout-sourced columns shown last (e.g. Compra Aprovada) */}
+            {filteredPinnedColumnsEnd.map(renderPinnedColumn)}
 
             {/* Create column */}
             {allowCreateStages ? (

@@ -110,14 +110,38 @@ export function SidebarApp() {
   // the seller can drag into their own stages without ever leaving the
   // checkout pipeline's own records (assign is pipeline-scoped, see
   // assignContactToStage on the backend).
-  const pinnedFunnelColumns = useMemo<PinnedCardColumn[]>(() => {
-    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED');
+  //
+  // "Oportunidades" hides any checkout lead already claimed into this
+  // funnel (matched by phone or email) so the same person doesn't show up
+  // twice once the seller has dragged them into a real stage. "Compra
+  // Aprovada" intentionally skips that filter — it's meant to always show
+  // every approved sale, even ones already being worked elsewhere.
+  const pinnedOpportunityColumns = useMemo<PinnedCardColumn[]>(() => {
     const opportunities = checkoutCards.filter((card) => card.latestOrder?.status !== 'APPROVED');
+    const localCards = selectedLocalFunnel?.cards ?? [];
+    const claimedPhones = new Set(
+      localCards
+        .map((card) => card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null))
+        .filter((value): value is string => Boolean(value))
+    );
+    const claimedEmails = new Set(
+      localCards.map((card) => card.email?.trim().toLowerCase()).filter((value): value is string => Boolean(value))
+    );
 
-    return [
-      { id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: opportunities },
-      { id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: approved }
-    ];
+    const deduped = opportunities.filter((card) => {
+      const phoneKey = card.normalizedPhone || (card.phone ? normalizePhone(card.phone) : null);
+      if (phoneKey && claimedPhones.has(phoneKey)) return false;
+      const emailKey = card.email?.trim().toLowerCase();
+      if (emailKey && claimedEmails.has(emailKey)) return false;
+      return true;
+    });
+
+    return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: deduped }];
+  }, [checkoutCards, selectedLocalFunnel]);
+
+  const pinnedApprovedColumns = useMemo<PinnedCardColumn[]>(() => {
+    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED');
+    return [{ id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: approved }];
   }, [checkoutCards]);
 
   const allFunnels = useMemo(() => {
@@ -939,7 +963,8 @@ export function SidebarApp() {
           conversations={conversations}
           columns={boardColumns}
           cards={boardCards}
-          pinnedCardColumns={!isCheckoutFunnelSelected ? pinnedFunnelColumns : undefined}
+          pinnedCardColumns={!isCheckoutFunnelSelected ? pinnedOpportunityColumns : undefined}
+          pinnedCardColumnsEnd={!isCheckoutFunnelSelected ? pinnedApprovedColumns : undefined}
           onSelectFunnel={setSelectedFunnelId}
           onCreateFunnel={handleCreateFunnel}
           onConfigureFunnel={handleConfigureFunnel}

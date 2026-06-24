@@ -798,6 +798,11 @@ body.crm-john-rail-open .crm-stagebar {
   white-space: nowrap;
 }
 
+.crm-funnel-card-email-empty {
+  color: oklch(var(--crm-muted-foreground));
+  font-style: italic;
+}
+
 .crm-funnel-card-email-copy {
   width: 24px;
   height: 24px;
