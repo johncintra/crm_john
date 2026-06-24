@@ -1,5 +1,6 @@
 import {
   addLeadNote,
+  addLeadTag,
   assignContactToStage,
   createLeadTask,
   createPipeline,
@@ -15,11 +16,13 @@ import {
   getProfile,
   login,
   movePipelineCard,
+  removeLeadTag,
   removePipelineCard,
   renamePipeline,
   reorderPipelineStages,
   syncLeadMessages,
   updateApiBaseUrl,
+  updateLeadEmail,
   updateLeadPhone,
   updateLeadStage,
   updatePipelineStage,
@@ -141,8 +144,36 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
           return;
         }
         case 'pipeline:assign-contact': {
-          const data = await assignContactToStage(message.payload.pipelineId, message.payload.stageId, message.payload.name, message.payload.phone);
+          const data = await assignContactToStage(
+            message.payload.pipelineId,
+            message.payload.stageId,
+            message.payload.name,
+            message.payload.phone,
+            {
+              email: message.payload.email,
+              tagIds: message.payload.tagIds,
+              originAmount: message.payload.originAmount,
+              originCurrency: message.payload.originCurrency,
+              originProductName: message.payload.originProductName,
+              originOrderStatus: message.payload.originOrderStatus
+            }
+          );
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:update-email': {
+          await updateLeadEmail(message.payload.leadId, message.payload.email);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:add-tag': {
+          const data = await addLeadTag(message.payload.leadId, message.payload.name, message.payload.color);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:remove-tag': {
+          await removeLeadTag(message.payload.leadId, message.payload.tagId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }
         case 'pipeline:move-card': {

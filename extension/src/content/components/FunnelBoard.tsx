@@ -54,6 +54,9 @@ interface FunnelBoardProps {
   onOpenConversation: (conversation: { name: string; phone: string | null; normalizedPhone?: string | null; leadId?: string }) => void | Promise<void>;
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void | Promise<void>;
   onAssignPinnedCard?: (card: FunnelCard, columnId: string) => void | Promise<void>;
+  onUpdateCardEmail?: (leadId: string, email: string) => void;
+  onAddCardTag?: (leadId: string, name: string) => void;
+  onRemoveCardTag?: (leadId: string, tagId: string) => void;
   onMoveCard: (cardId: string, columnId: string) => void;
   onRemoveCard: (cardId: string) => void;
   onCreateColumn: (payload: { name: string; color: string }) => void;
@@ -124,6 +127,9 @@ export function FunnelBoard({
   onOpenConversation,
   onAssignConversation,
   onAssignPinnedCard,
+  onUpdateCardEmail,
+  onAddCardTag,
+  onRemoveCardTag,
   onMoveCard,
   onRemoveCard,
   onCreateColumn,
@@ -206,7 +212,8 @@ export function FunnelBoard({
 
             {/* Email row — always rendered, "N/D" when missing, so every
                 card (checkout-sourced or added straight from a chat) uses
-                the same layout. */}
+                the same layout. Editable when missing, so the seller can
+                fill it in later. */}
             <div className="crm-funnel-card-email-row">
               <p className={card.email ? 'crm-funnel-card-email' : 'crm-funnel-card-email crm-funnel-card-email-empty'}>
                 {card.email ?? 'E-mail: N/D'}
@@ -223,6 +230,22 @@ export function FunnelBoard({
                   }}
                 >
                   <Copy className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+              {!card.email && card.leadId && onUpdateCardEmail ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Adicionar email"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const value = window.prompt(`E-mail de ${card.name}:`)?.trim();
+                    if (value) onUpdateCardEmail(card.leadId!, value);
+                  }}
+                >
+                  <Plus className="crm-h-3 crm-w-3" />
                 </button>
               ) : null}
             </div>
@@ -243,22 +266,52 @@ export function FunnelBoard({
               <p className="crm-funnel-card-meta">{card.source}</p>
             ) : null}
 
-            {card.tags?.length ? (
-              <div className="crm-funnel-card-tags">
-                {card.tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="crm-funnel-card-tag"
-                    style={{
-                      borderColor: `${tag.color ?? '#334155'}55`,
-                      color: tag.color ?? '#cbd5e1'
-                    }}
-                  >
-                    {tag.name}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+            <div className="crm-funnel-card-tags">
+              {card.tags?.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="crm-funnel-card-tag"
+                  style={{
+                    borderColor: `${tag.color ?? '#334155'}55`,
+                    color: tag.color ?? '#cbd5e1'
+                  }}
+                >
+                  {tag.name}
+                  {card.leadId && onRemoveCardTag ? (
+                    <button
+                      type="button"
+                      className="crm-funnel-card-tag-remove"
+                      title="Remover tag"
+                      onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onRemoveCardTag(card.leadId!, tag.id);
+                      }}
+                    >
+                      <X className="crm-h-2.5 crm-w-2.5" />
+                    </button>
+                  ) : null}
+                </span>
+              ))}
+              {card.leadId && onAddCardTag ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-tag crm-funnel-card-tag-add"
+                  title="Adicionar tag"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const value = window.prompt(`Nova tag para ${card.name}:`)?.trim();
+                    if (value) onAddCardTag(card.leadId!, value);
+                  }}
+                >
+                  <Plus className="crm-h-2.5 crm-w-2.5" />
+                  tag
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {options.allowRemove ? (

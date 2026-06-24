@@ -831,6 +831,7 @@ body.crm-john-rail-open .crm-stagebar {
 .crm-funnel-card-tag {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
@@ -839,6 +840,29 @@ body.crm-john-rail-open .crm-stagebar {
   color: oklch(var(--crm-foreground) / 0.9);
   font-size: 11px;
   font-weight: 700;
+}
+
+.crm-funnel-card-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+  opacity: 0.6;
+}
+
+.crm-funnel-card-tag-remove:hover {
+  opacity: 1;
+}
+
+.crm-funnel-card-tag-add {
+  background: transparent;
+  border-style: dashed;
+  color: oklch(var(--crm-muted-foreground));
+}
+
+.crm-funnel-card-tag-add:hover {
+  color: oklch(var(--crm-foreground));
+  border-color: oklch(var(--crm-border));
 }
 
 .crm-funnel-card-btn {

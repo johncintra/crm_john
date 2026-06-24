@@ -636,6 +636,41 @@ export function SidebarApp() {
     }
   };
 
+  const handleUpdateCardEmail = (leadId: string, email: string) => {
+    setFunnels((prev) => prev.map((f) => ({
+      ...f,
+      cards: f.cards.map((c) => (c.leadId === leadId ? { ...c, email } : c))
+    })));
+    void sendMessage({ type: 'lead:update-email', payload: { leadId, email } })
+      .then(() => setToast('Email atualizado.'))
+      .catch(() => setToast('Erro ao salvar email no servidor.'));
+  };
+
+  const handleAddCardTag = (leadId: string, name: string) => {
+    void sendMessage<{ id: string; name: string; color: string | null }>({ type: 'lead:add-tag', payload: { leadId, name } })
+      .then((tag) => {
+        setFunnels((prev) => prev.map((f) => ({
+          ...f,
+          cards: f.cards.map((c) => {
+            if (c.leadId !== leadId) return c;
+            if ((c.tags ?? []).some((t) => t.id === tag.id)) return c;
+            return { ...c, tags: [...(c.tags ?? []), tag] };
+          })
+        })));
+        setToast('Tag adicionada.');
+      })
+      .catch(() => setToast('Erro ao adicionar tag.'));
+  };
+
+  const handleRemoveCardTag = (leadId: string, tagId: string) => {
+    setFunnels((prev) => prev.map((f) => ({
+      ...f,
+      cards: f.cards.map((c) => (c.leadId === leadId ? { ...c, tags: (c.tags ?? []).filter((t) => t.id !== tagId) } : c))
+    })));
+    void sendMessage({ type: 'lead:remove-tag', payload: { leadId, tagId } })
+      .catch(() => setToast('Erro ao remover tag no servidor.'));
+  };
+
   const handleCreateColumn = ({ name, color }: { name: string; color: string }) => {
     if (!selectedLocalFunnel || isCheckoutFunnelSelected) return;
     const tempId = `column-${Date.now()}`;
@@ -730,23 +765,60 @@ export function SidebarApp() {
           ...f,
           cards: f.cards.map((c) =>
             c.id === existing.id
-              ? { ...c, columnId, name: pinnedCard.name, phone, email: pinnedCard.email, normalizedPhone: phone ? normalizePhone(phone) : c.normalizedPhone, avatarUrl: pinnedCard.avatarUrl }
+              ? {
+                  ...c,
+                  columnId,
+                  name: pinnedCard.name,
+                  phone,
+                  email: pinnedCard.email,
+                  normalizedPhone: phone ? normalizePhone(phone) : c.normalizedPhone,
+                  avatarUrl: pinnedCard.avatarUrl,
+                  tags: pinnedCard.tags,
+                  latestOrder: pinnedCard.latestOrder
+                }
               : c
           )
         };
       }
       return {
         ...f,
-        cards: [...f.cards, { id: tempId, name: pinnedCard.name, phone, email: pinnedCard.email, normalizedPhone: phone ? normalizePhone(phone) : null, avatarUrl: pinnedCard.avatarUrl, columnId }]
+        cards: [
+          ...f.cards,
+          {
+            id: tempId,
+            name: pinnedCard.name,
+            phone,
+            email: pinnedCard.email,
+            normalizedPhone: phone ? normalizePhone(phone) : null,
+            avatarUrl: pinnedCard.avatarUrl,
+            columnId,
+            tags: pinnedCard.tags,
+            latestOrder: pinnedCard.latestOrder
+          }
+        ]
       };
     }));
-    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: pinnedCard.name, phone } })
+    void sendMessage<{ id: string; leadId: string; tags: FunnelCard['tags']; latestOrder: FunnelCard['latestOrder'] }>({
+      type: 'pipeline:assign-contact',
+      payload: {
+        pipelineId: selectedLocalFunnel.id,
+        stageId: columnId,
+        name: pinnedCard.name,
+        phone,
+        email: pinnedCard.email,
+        tagIds: pinnedCard.tags?.map((tag) => tag.id),
+        originAmount: pinnedCard.latestOrder?.amount,
+        originCurrency: pinnedCard.latestOrder?.currency,
+        originProductName: pinnedCard.latestOrder?.productName,
+        originOrderStatus: pinnedCard.latestOrder?.status
+      }
+    })
       .then((card) => {
         setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : {
           ...f,
           cards: f.cards.map((c) =>
             c.id === tempId || c.name === pinnedCard.name
-              ? { ...c, id: card.id, leadId: card.leadId }
+              ? { ...c, id: card.id, leadId: card.leadId, tags: card.tags, latestOrder: card.latestOrder }
               : c
           )
         }));
@@ -977,6 +1049,9 @@ export function SidebarApp() {
           onOpenConversation={handleOpenConversation}
           onAssignConversation={handleAssignConversation}
           onAssignPinnedCard={handleAssignPinnedCard}
+          onUpdateCardEmail={handleUpdateCardEmail}
+          onAddCardTag={handleAddCardTag}
+          onRemoveCardTag={handleRemoveCardTag}
           onMoveCard={(cardId, columnId) => {
             void handleMoveCard(cardId, columnId);
           }}

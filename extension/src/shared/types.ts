@@ -235,7 +235,24 @@ export type BackgroundRequest =
   | { type: 'pipeline:update-stage'; payload: { pipelineId: string; stageId: string; name: string; color: string } }
   | { type: 'pipeline:delete-stage'; payload: { pipelineId: string; stageId: string } }
   | { type: 'pipeline:reorder-stages'; payload: { pipelineId: string; stageId: string; targetStageId: string } }
-  | { type: 'pipeline:assign-contact'; payload: { pipelineId: string; stageId: string; name: string; phone?: string | null } }
+  | {
+      type: 'pipeline:assign-contact';
+      payload: {
+        pipelineId: string;
+        stageId: string;
+        name: string;
+        phone?: string | null;
+        email?: string | null;
+        tagIds?: string[];
+        originAmount?: number;
+        originCurrency?: string;
+        originProductName?: string;
+        originOrderStatus?: string;
+      };
+    }
+  | { type: 'lead:update-email'; payload: { leadId: string; email: string } }
+  | { type: 'lead:add-tag'; payload: { leadId: string; name: string; color?: string } }
+  | { type: 'lead:remove-tag'; payload: { leadId: string; tagId: string } }
   | { type: 'pipeline:move-card'; payload: { pipelineId: string; leadId: string; stageId: string } }
   | { type: 'pipeline:remove-card'; payload: { pipelineId: string; leadId: string } }
   | { type: 'lead:fetch-messages'; payload: { leadId: string; hours?: number } }

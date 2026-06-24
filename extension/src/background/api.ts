@@ -297,8 +297,33 @@ export async function reorderPipelineStages(pipelineId: string, stageId: string,
   await request(`/pipelines/${pipelineId}/stages/reorder`, { method: 'POST', body: { stageId, targetStageId } });
 }
 
-export async function assignContactToStage(pipelineId: string, stageId: string, name: string, phone?: string | null): Promise<RemotePipelineBoard['cards'][number]> {
-  return request(`/pipelines/${pipelineId}/cards`, { method: 'POST', body: { stageId, name, phone } });
+export async function assignContactToStage(
+  pipelineId: string,
+  stageId: string,
+  name: string,
+  phone?: string | null,
+  extra?: {
+    email?: string | null;
+    tagIds?: string[];
+    originAmount?: number;
+    originCurrency?: string;
+    originProductName?: string;
+    originOrderStatus?: string;
+  }
+): Promise<RemotePipelineBoard['cards'][number]> {
+  return request(`/pipelines/${pipelineId}/cards`, { method: 'POST', body: { stageId, name, phone, ...extra } });
+}
+
+export async function updateLeadEmail(leadId: string, email: string): Promise<void> {
+  await request(`/leads/${leadId}/email`, { method: 'PATCH', body: { email } });
+}
+
+export async function addLeadTag(leadId: string, name: string, color?: string): Promise<{ id: string; name: string; color: string | null }> {
+  return request(`/leads/${leadId}/tags`, { method: 'POST', body: { name, color } });
+}
+
+export async function removeLeadTag(leadId: string, tagId: string): Promise<void> {
+  await request(`/leads/${leadId}/tags/${tagId}`, { method: 'DELETE' });
 }
 
 export async function movePipelineCard(pipelineId: string, leadId: string, stageId: string): Promise<void> {
