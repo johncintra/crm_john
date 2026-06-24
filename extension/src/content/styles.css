@@ -441,12 +441,18 @@ body.crm-john-rail-open .crm-stagebar {
   flex-wrap: wrap;
 }
 
+.crm-funnel-search-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 28px 14px;
+}
+
 .crm-funnel-tag-filters {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 0 28px 14px;
 }
 
 .crm-funnel-tag-filter {
@@ -518,6 +524,15 @@ body.crm-john-rail-open .crm-stagebar {
   background: oklch(var(--crm-muted) / 0.4);
   border: 1px solid oklch(var(--crm-border) / 0.7);
   color: oklch(var(--crm-foreground));
+}
+
+.crm-funnel-btn-whatsapp {
+  background: #25d366;
+  color: #06251a;
+}
+
+.crm-funnel-btn-whatsapp:hover {
+  background: #1ebd5a;
 }
 
 .crm-funnel-columns {
@@ -876,6 +891,78 @@ body.crm-john-rail-open .crm-stagebar {
 .crm-funnel-card-tag-add:hover {
   color: oklch(var(--crm-foreground));
   border-color: oklch(var(--crm-border));
+}
+
+.crm-tag-picker-inline {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: calc(var(--crm-radius) * 0.8);
+  border: 1px solid oklch(var(--crm-border) / 0.6);
+  background: oklch(var(--crm-card-2) / 0.6);
+}
+
+.crm-tag-picker-inline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: oklch(var(--crm-muted-foreground));
+}
+
+.crm-tag-picker-inline-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: oklch(var(--crm-muted-foreground));
+}
+
+.crm-tag-picker-inline-close:hover {
+  color: oklch(var(--crm-foreground));
+}
+
+.crm-tag-picker-inline-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.crm-tag-picker-inline-empty {
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: oklch(var(--crm-muted-foreground));
+}
+
+.crm-tag-picker-inline-custom {
+  display: flex;
+  gap: 6px;
+}
+
+.crm-tag-picker-inline-custom input {
+  flex: 1;
+  min-width: 0;
+  border-radius: calc(var(--crm-radius) * 0.6);
+  border: 1px solid oklch(var(--crm-border) / 0.7);
+  background: oklch(var(--crm-background) / 0.6);
+  color: oklch(var(--crm-foreground));
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.crm-tag-picker-inline-custom input:focus {
+  outline: none;
+}
+
+.crm-tag-picker-inline-custom button {
+  border-radius: calc(var(--crm-radius) * 0.6);
+  background: oklch(var(--crm-primary));
+  color: white;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .crm-funnel-card-btn {

@@ -487,52 +487,54 @@ export function FunnelBoard({
                   ))}
                 </select>
               </label>
+              <button type="button" className="crm-funnel-btn crm-funnel-btn-whatsapp" onClick={onClose}>
+                <MessageCircle className="crm-h-4 crm-w-4" />
+                Conversas
+              </button>
               <button type="button" className="crm-funnel-btn crm-funnel-btn-primary" onClick={onCreateFunnel}>
                 <Plus className="crm-h-4 crm-w-4" />
                 Criar Funil
               </button>
-              <input
-                className="crm-funnel-search"
-                placeholder="Buscar contatos..."
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
               <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onConfigureFunnel}>
                 Configurar
-              </button>
-              <button type="button" className="crm-funnel-btn crm-funnel-btn-close" onClick={onClose}>
-                <X className="crm-h-4 crm-w-4" />
-                Fechar
               </button>
             </div>
           </div>
 
-          {/* Existing tags as one-click filters — clicking "perdido" is also
-              the only way to reveal leads hidden by that tag (see
-              matchesSearch below). */}
-          {availableTags.length ? (
-            <div className="crm-funnel-tag-filters">
-              {availableTags.map((tag) => {
-                const isActive = normalizedSearch === tag.name.trim().toLowerCase();
-                const tagColor = tag.color ?? '#334155';
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className="crm-funnel-card-tag crm-funnel-tag-filter"
-                    style={
-                      isActive
-                        ? { borderColor: tagColor, backgroundColor: tagColor, color: '#0b1120' }
-                        : { borderColor: `${tagColor}55`, color: tagColor }
-                    }
-                    onClick={() => setSearch(isActive ? '' : tag.name)}
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          ) : null}
+          {/* Search + existing tags as one-click filters, right below it —
+              clicking "perdido" is also the only way to reveal leads hidden
+              by that tag (see matchesSearch below). */}
+          <div className="crm-funnel-search-group">
+            <input
+              className="crm-funnel-search"
+              placeholder="Buscar contatos..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {availableTags.length ? (
+              <div className="crm-funnel-tag-filters">
+                {availableTags.map((tag) => {
+                  const isActive = normalizedSearch === tag.name.trim().toLowerCase();
+                  const tagColor = tag.color ?? '#334155';
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      className="crm-funnel-card-tag crm-funnel-tag-filter"
+                      style={
+                        isActive
+                          ? { borderColor: tagColor, backgroundColor: tagColor, color: '#0b1120' }
+                          : { borderColor: `${tagColor}55`, color: tagColor }
+                      }
+                      onClick={() => setSearch(isActive ? '' : tag.name)}
+                    >
+                      {tag.name}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
 
           {/* ── Columns ── */}
           <div ref={columnsRef} className="crm-funnel-columns crm-scrollbar">
