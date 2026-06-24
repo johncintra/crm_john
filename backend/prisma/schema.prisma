@@ -78,6 +78,11 @@ model Workspace {
   id            String          @id @default(cuid())
   name          String
   checkoutToken String          @unique @default(cuid())
+  // Overrides whatever product name the checkout webhook sends — each
+  // workspace maps to one Kiwify account/token, so the actual product
+  // being sold there is fixed and known ahead of time, regardless of how
+  // it's titled on Kiwify's side.
+  defaultProductName String?
   memberships   Membership[]
   pipelines     Pipeline[]
   leads         Lead[]

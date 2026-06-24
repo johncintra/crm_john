@@ -603,12 +603,21 @@ export class CrmService {
           }
         }));
 
+      // Each workspace maps to one Kiwify account/product — the real
+      // product being sold there is fixed, regardless of whatever title
+      // Kiwify sends, so a configured default always wins over the
+      // payload. Ad leads keep their own distinct "Lead de Anúncio" name.
+      const effectiveProductName =
+        provider !== CheckoutProvider.ACTIVECAMPAIGN && workspace.defaultProductName
+          ? workspace.defaultProductName
+          : dto.productName;
+
       const nextOrder = order
         ? await tx.order.update({
             where: { id: order.id },
             data: {
               leadId: updatedLead.id,
-              productName: dto.productName,
+              productName: effectiveProductName,
               amount: dto.amount,
               currency: dto.currency?.trim() || 'BRL',
               status: dto.status
@@ -620,7 +629,7 @@ export class CrmService {
               leadId: updatedLead.id,
               provider,
               externalId: dto.externalId ?? null,
-              productName: dto.productName,
+              productName: effectiveProductName,
               amount: dto.amount,
               currency: dto.currency?.trim() || 'BRL',
               status: dto.status
