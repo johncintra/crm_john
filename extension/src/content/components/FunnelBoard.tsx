@@ -467,12 +467,18 @@ export function FunnelBoard({
 
           {/* ── Header ── */}
           <div className="crm-funnel-header">
-            <div>
-              <p className="crm-funnel-kicker">xCore CRM</p>
-              <h2 className="crm-funnel-title">{funnelName}</h2>
-              <p className="crm-funnel-subtitle">
-                {cards.length} lead{cards.length !== 1 ? 's' : ''} · {columns.length} etapa{columns.length !== 1 ? 's' : ''}
-              </p>
+            <div className="crm-funnel-title-row">
+              <div>
+                <p className="crm-funnel-kicker">xCore CRM</p>
+                <h2 className="crm-funnel-title">{funnelName}</h2>
+                <p className="crm-funnel-subtitle">
+                  {cards.length} lead{cards.length !== 1 ? 's' : ''} · {columns.length} etapa{columns.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <button type="button" className="crm-funnel-btn crm-funnel-btn-whatsapp" onClick={onClose}>
+                <MessageCircle className="crm-h-4 crm-w-4" />
+                Conversas
+              </button>
             </div>
             <div className="crm-funnel-actions">
               <label className="crm-funnel-select-wrap">
@@ -487,53 +493,47 @@ export function FunnelBoard({
                   ))}
                 </select>
               </label>
-              <button type="button" className="crm-funnel-btn crm-funnel-btn-whatsapp" onClick={onClose}>
-                <MessageCircle className="crm-h-4 crm-w-4" />
-                Conversas
-              </button>
               <button type="button" className="crm-funnel-btn crm-funnel-btn-primary" onClick={onCreateFunnel}>
                 <Plus className="crm-h-4 crm-w-4" />
                 Criar Funil
               </button>
+              <input
+                className="crm-funnel-search"
+                placeholder="Buscar contatos..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              {/* flex-basis: 100% forces everything after it (Configurar) onto
+                  a new wrapped line, so this filter row lands directly under
+                  the search input above instead of trailing after the other
+                  buttons — without pulling the search input out of this bar. */}
+              {availableTags.length ? (
+                <div className="crm-funnel-tag-filters">
+                  {availableTags.map((tag) => {
+                    const isActive = normalizedSearch === tag.name.trim().toLowerCase();
+                    const tagColor = tag.color ?? '#334155';
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        className="crm-funnel-card-tag crm-funnel-tag-filter"
+                        style={
+                          isActive
+                            ? { borderColor: tagColor, backgroundColor: tagColor, color: '#0b1120' }
+                            : { borderColor: `${tagColor}55`, color: tagColor }
+                        }
+                        onClick={() => setSearch(isActive ? '' : tag.name)}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
               <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onConfigureFunnel}>
                 Configurar
               </button>
             </div>
-          </div>
-
-          {/* Search + existing tags as one-click filters, right below it —
-              clicking "perdido" is also the only way to reveal leads hidden
-              by that tag (see matchesSearch below). */}
-          <div className="crm-funnel-search-group">
-            <input
-              className="crm-funnel-search"
-              placeholder="Buscar contatos..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            {availableTags.length ? (
-              <div className="crm-funnel-tag-filters">
-                {availableTags.map((tag) => {
-                  const isActive = normalizedSearch === tag.name.trim().toLowerCase();
-                  const tagColor = tag.color ?? '#334155';
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      className="crm-funnel-card-tag crm-funnel-tag-filter"
-                      style={
-                        isActive
-                          ? { borderColor: tagColor, backgroundColor: tagColor, color: '#0b1120' }
-                          : { borderColor: `${tagColor}55`, color: tagColor }
-                      }
-                      onClick={() => setSearch(isActive ? '' : tag.name)}
-                    >
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
 
           {/* ── Columns ── */}

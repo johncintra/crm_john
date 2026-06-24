@@ -406,11 +406,18 @@ body.crm-john-rail-open .crm-stagebar {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
   margin-bottom: 0;
   padding: 8px 12px;
   background: oklch(var(--crm-card));
   border-bottom: 1px solid oklch(var(--crm-border) / 0.6);
+}
+
+.crm-funnel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .crm-funnel-kicker {
@@ -441,18 +448,13 @@ body.crm-john-rail-open .crm-stagebar {
   flex-wrap: wrap;
 }
 
-.crm-funnel-search-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0 28px 14px;
-}
-
 .crm-funnel-tag-filters {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  flex-basis: 100%;
+  width: 100%;
 }
 
 .crm-funnel-tag-filter {
