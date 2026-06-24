@@ -23,6 +23,7 @@ import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { UpdateLeadStageDto } from './dto/update-lead-stage.dto';
 import { UpdateLeadPhoneDto } from './dto/update-lead-phone.dto';
 import { UpdateLeadEmailDto } from './dto/update-lead-email.dto';
+import { UpdateLeadValueDto } from './dto/update-lead-value.dto';
 import { AddLeadTagDto } from './dto/add-lead-tag.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { PipelineCreateDto } from './dto/pipeline-create.dto';
@@ -148,6 +149,22 @@ export class CrmController {
     @Param('tagId') tagId: string
   ) {
     return this.crmService.removeLeadTag(user.sub, leadId, tagId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('leads/:leadId/value')
+  updateLeadValue(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: UpdateLeadValueDto
+  ) {
+    return this.crmService.updateLeadValue(user.sub, leadId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('workspace/tags')
+  listWorkspaceTags(@CurrentUser() user: AuthUser) {
+    return this.crmService.listWorkspaceTags(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)

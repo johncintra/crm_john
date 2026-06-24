@@ -472,6 +472,35 @@ export class CrmService {
     }));
   }
 
+  async listWorkspaceTags(userId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const tags = await this.prisma.leadTag.findMany({
+      where: { workspaceId },
+      orderBy: { name: 'asc' }
+    });
+    return tags.map((tag) => ({ id: tag.id, name: tag.name, color: tag.color }));
+  }
+
+  async updateLeadValue(
+    userId: string,
+    leadId: string,
+    value: { amount: number; currency?: string; productName?: string }
+  ) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        originAmount: value.amount,
+        originCurrency: value.currency ?? 'BRL',
+        originProductName: value.productName ?? null
+      }
+    });
+
+    return { ok: true };
+  }
+
   async ingestCheckoutEvent(provider: CheckoutProvider, token: string, dto: IngestCheckoutEventDto) {
     let workspace = await this.prisma.workspace.findUnique({
       where: { checkoutToken: token }
