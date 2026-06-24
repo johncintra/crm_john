@@ -52,7 +52,8 @@ const CHECKOUT_TAGS = [
   { name: 'aprovado', color: '#22c55e' },
   { name: 'recusado', color: '#ef4444' },
   { name: 'reembolso', color: '#f59e0b' },
-  { name: 'chargeback', color: '#7c3aed' }
+  { name: 'chargeback', color: '#7c3aed' },
+  { name: 'perdido', color: '#94a3b8' }
 ];
 
 const DEFAULT_TEMPLATES: Array<{ title: string; category: TemplateCategory; content: string }> = [
