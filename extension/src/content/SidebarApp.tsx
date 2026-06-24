@@ -382,6 +382,10 @@ export function SidebarApp() {
         payload: { leadId: pending.leadId, hours: 24 }
       })
         .then((history) => {
+          // Brand-new leads opened for the first time have zero history by
+          // definition — only pop this up when there's something to catch
+          // up on (an existing lead reopened from a different number).
+          if (!history.length) return;
           setMessageHistoryLeadName(pending.name);
           setMessageHistory(history);
         })
