@@ -126,6 +126,12 @@ export interface MessageTemplate {
   content: string;
 }
 
+export interface WorkspaceTag {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 export interface PipelineStage {
   id: string;
   name: string;
@@ -222,6 +228,8 @@ export type BackgroundRequest =
   | { type: 'lead:fetch-context'; payload: { phone: string } }
   | { type: 'checkout:fetch-board' }
   | { type: 'workspace:fetch-templates' }
+  | { type: 'workspace:fetch-tags' }
+  | { type: 'lead:update-value'; payload: { leadId: string; amount: number; currency?: string; productName?: string } }
   | { type: 'lead:add-note'; payload: { leadId: string; content: string } }
   | { type: 'lead:create-task'; payload: { leadId: string; title: string; description?: string } }
   | { type: 'task:update-status'; payload: { taskId: string; status: TaskStatus } }

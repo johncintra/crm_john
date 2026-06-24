@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LayoutPanelTop, ListTodo, MessageSquareText, UserCircle2 } from 'lucide-react';
+import { Contact, LayoutPanelTop, ListTodo, MessageSquareText, UserCircle2, X } from 'lucide-react';
 import { demoLeadContext } from './demo-data';
 import { useBackground } from './hooks/useBackground';
 import { useWhatsAppConversation } from './hooks/useWhatsAppConversation';
 import { useWhatsAppConversationList } from './hooks/useWhatsAppConversationList';
-import { copyToClipboard, normalizePhone } from '../shared/utils';
+import { copyToClipboard, formatCurrency, normalizePhone } from '../shared/utils';
 import { savePendingMessageHistory, takePendingMessageHistory } from '../shared/storage';
 import {
   getAllWhatsAppConversationList,
@@ -16,7 +16,7 @@ import {
   openConversationByPhoneNumber,
   openConversationInWhatsApp
 } from './whatsapp';
-import type { AuthSession, CheckoutBoardData, LeadContext, RemoteLeadMessage } from '../shared/types';
+import type { AuthSession, CheckoutBoardData, LeadContext, RemoteLeadMessage, WorkspaceTag } from '../shared/types';
 import {
   FunnelBoard,
   type FunnelCard,
@@ -25,9 +25,10 @@ import {
 } from './components/FunnelBoard';
 import { LoginScreen } from './components/LoginScreen';
 import { MessageHistoryPanel } from './components/MessageHistoryPanel';
+import { TagPicker } from './components/TagPicker';
 
 type WorkspaceView = 'general' | 'funnel';
-type RailPanel = 'account' | 'templates' | 'lists' | 'calendar';
+type RailPanel = 'account' | 'lead' | 'templates' | 'lists' | 'calendar';
 
 interface SavedFunnel {
   id: string;
@@ -55,6 +56,7 @@ export function SidebarApp() {
   const [authChecked, setAuthChecked] = useState(false);
   const isAuthenticated = Boolean(session?.token);
   const [context, setContext] = useState<LeadContext | null>(demoLeadContext);
+  const [workspaceTags, setWorkspaceTags] = useState<WorkspaceTag[]>([]);
   const [toast, setToast] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('funnel');
   const [railPanel, setRailPanel] = useState<RailPanel>('account');
@@ -320,6 +322,13 @@ export function SidebarApp() {
     if (!isAuthenticated) return;
     void refreshLeadContext();
   }, [refreshLeadContext, isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void sendMessage<WorkspaceTag[]>({ type: 'workspace:fetch-tags' })
+      .then((tags) => setWorkspaceTags(tags))
+      .catch(() => undefined);
+  }, [isAuthenticated]);
 
   // Restore the "conversa recente" panel after opening a brand-new chat by
   // phone caused a full page reload (the only reliable way to open a chat
@@ -641,6 +650,7 @@ export function SidebarApp() {
       ...f,
       cards: f.cards.map((c) => (c.leadId === leadId ? { ...c, email } : c))
     })));
+    setContext((prev) => (prev && prev.lead.id === leadId ? { ...prev, lead: { ...prev.lead, email } } : prev));
     void sendMessage({ type: 'lead:update-email', payload: { leadId, email } })
       .then(() => setToast('Email atualizado.'))
       .catch(() => setToast('Erro ao salvar email no servidor.'));
@@ -657,6 +667,12 @@ export function SidebarApp() {
             return { ...c, tags: [...(c.tags ?? []), tag] };
           })
         })));
+        setContext((prev) => {
+          if (!prev || prev.lead.id !== leadId) return prev;
+          if ((prev.lead.tags ?? []).some((t) => t.id === tag.id)) return prev;
+          return { ...prev, lead: { ...prev.lead, tags: [...(prev.lead.tags ?? []), tag] } };
+        });
+        setWorkspaceTags((prev) => (prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]));
         setToast('Tag adicionada.');
       })
       .catch(() => setToast('Erro ao adicionar tag.'));
@@ -667,8 +683,28 @@ export function SidebarApp() {
       ...f,
       cards: f.cards.map((c) => (c.leadId === leadId ? { ...c, tags: (c.tags ?? []).filter((t) => t.id !== tagId) } : c))
     })));
+    setContext((prev) => (prev && prev.lead.id === leadId
+      ? { ...prev, lead: { ...prev.lead, tags: (prev.lead.tags ?? []).filter((t) => t.id !== tagId) } }
+      : prev));
     void sendMessage({ type: 'lead:remove-tag', payload: { leadId, tagId } })
       .catch(() => setToast('Erro ao remover tag no servidor.'));
+  };
+
+  const handleUpdateCardValue = (leadId: string, amount: number, productName?: string) => {
+    setFunnels((prev) => prev.map((f) => ({
+      ...f,
+      cards: f.cards.map((c) =>
+        c.leadId === leadId
+          ? { ...c, latestOrder: { id: c.latestOrder?.id ?? 'snapshot', amount, currency: 'BRL', productName: productName ?? c.latestOrder?.productName ?? '', status: c.latestOrder?.status ?? 'OPEN', provider: c.latestOrder?.provider ?? 'KIWIFY' } }
+          : c
+      )
+    })));
+    setContext((prev) => (prev && prev.lead.id === leadId
+      ? { ...prev, lead: { ...prev.lead, latestOrder: { id: prev.lead.latestOrder?.id ?? 'snapshot', amount, currency: 'BRL', productName: productName ?? prev.lead.latestOrder?.productName ?? '', status: prev.lead.latestOrder?.status ?? 'OPEN' } } }
+      : prev));
+    void sendMessage({ type: 'lead:update-value', payload: { leadId, amount, currency: 'BRL', productName } })
+      .then(() => setToast('Valor atualizado.'))
+      .catch(() => setToast('Erro ao salvar valor no servidor.'));
   };
 
   const handleCreateColumn = ({ name, color }: { name: string; color: string }) => {
@@ -991,11 +1027,13 @@ export function SidebarApp() {
   const activePanelTitle =
     railPanel === 'account'
       ? 'Minha Conta'
-      : railPanel === 'templates'
-        ? 'Modelos'
-        : railPanel === 'lists'
-          ? 'Listas de Contatos'
-          : 'Calendario';
+      : railPanel === 'lead'
+        ? 'Card do Lead'
+        : railPanel === 'templates'
+          ? 'Modelos'
+          : railPanel === 'lists'
+            ? 'Listas de Contatos'
+            : 'Calendario';
 
   if (!authChecked) {
     return <div className="crm-app-shell crm-fade-in" />;
@@ -1052,6 +1090,7 @@ export function SidebarApp() {
           onUpdateCardEmail={handleUpdateCardEmail}
           onAddCardTag={handleAddCardTag}
           onRemoveCardTag={handleRemoveCardTag}
+          availableTags={workspaceTags}
           onMoveCard={(cardId, columnId) => {
             void handleMoveCard(cardId, columnId);
           }}
@@ -1129,6 +1168,14 @@ export function SidebarApp() {
         </button>
         <button
           type="button"
+          onClick={() => toggleRailPanel('lead')}
+          className={`crm-right-rail-icon ${railPanel === 'lead' && isRailOpen ? 'is-active' : ''}`}
+          title="Card do Lead"
+        >
+          <Contact className="crm-h-5 crm-w-5" />
+        </button>
+        <button
+          type="button"
           onClick={() => toggleRailPanel('templates')}
           className={`crm-right-rail-icon ${railPanel === 'templates' && isRailOpen ? 'is-active' : ''}`}
           title="Modelos"
@@ -1186,6 +1233,106 @@ export function SidebarApp() {
                   <strong>{context ? 0 : 1}</strong>
                 </div>
               </div>
+            </div>
+          ) : null}
+
+          {railPanel === 'lead' ? (
+            <div className="crm-rail-stack">
+              {context?.lead ? (
+                <>
+                  <div className="crm-rail-card">
+                    <div className="crm-rail-chip">{context.lead.name}</div>
+                    {context.lead.currentStage ? (
+                      <p className="crm-mt-1 crm-text-xs crm-text-slate-400">
+                        Etapa: <span style={{ color: context.lead.currentStage.color ?? undefined }}>{context.lead.currentStage.name}</span>
+                      </p>
+                    ) : null}
+                    <p className="crm-mt-1 crm-text-xs crm-text-slate-400">
+                      {context.lead.phone ?? context.lead.normalizedPhone ?? 'Sem telefone'}
+                    </p>
+                  </div>
+
+                  <div className="crm-rail-card">
+                    <span className="crm-text-xs crm-font-semibold crm-text-slate-300">Email</span>
+                    <p className="crm-mt-1 crm-text-sm crm-text-white">
+                      {context.lead.email ?? <span className="crm-text-slate-500 crm-italic">E-mail: N/D</span>}
+                    </p>
+                    <button
+                      type="button"
+                      className="crm-mt-2 crm-text-xs crm-font-semibold crm-text-accent-300"
+                      onClick={() => {
+                        const value = window.prompt(`E-mail de ${context.lead.name}:`, context.lead.email ?? '')?.trim();
+                        if (value) handleUpdateCardEmail(context.lead.id, value);
+                      }}
+                    >
+                      {context.lead.email ? 'Editar email' : '+ Adicionar email'}
+                    </button>
+                  </div>
+
+                  <div className="crm-rail-card">
+                    <span className="crm-text-xs crm-font-semibold crm-text-slate-300">Valor</span>
+                    <p className="crm-mt-1 crm-text-sm crm-text-white">
+                      {context.lead.latestOrder ? (
+                        <>
+                          {formatCurrency(context.lead.latestOrder.amount, context.lead.latestOrder.currency)}
+                          {context.lead.latestOrder.productName ? ` · ${context.lead.latestOrder.productName}` : ''}
+                        </>
+                      ) : (
+                        <span className="crm-text-slate-500 crm-italic">Valor: N/D</span>
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      className="crm-mt-2 crm-text-xs crm-font-semibold crm-text-accent-300"
+                      onClick={() => {
+                        const raw = window
+                          .prompt('Valor (R$):', context.lead.latestOrder ? (context.lead.latestOrder.amount / 100).toFixed(2) : '')
+                          ?.trim();
+                        if (!raw) return;
+                        const amount = Math.round(parseFloat(raw.replace(',', '.')) * 100);
+                        if (!Number.isFinite(amount) || amount < 0) return;
+                        const productName = window.prompt('Produto (opcional):', context.lead.latestOrder?.productName ?? '')?.trim();
+                        handleUpdateCardValue(context.lead.id, amount, productName || undefined);
+                      }}
+                    >
+                      {context.lead.latestOrder ? 'Editar valor' : '+ Adicionar valor'}
+                    </button>
+                  </div>
+
+                  <div className="crm-rail-card">
+                    <span className="crm-text-xs crm-font-semibold crm-text-slate-300">Tags</span>
+                    <div className="crm-funnel-card-tags crm-mt-2">
+                      {context.lead.tags?.map((tag) => (
+                        <span
+                          key={tag.id}
+                          className="crm-funnel-card-tag"
+                          style={{ borderColor: `${tag.color ?? '#334155'}55`, color: tag.color ?? '#cbd5e1' }}
+                        >
+                          {tag.name}
+                          <button
+                            type="button"
+                            className="crm-funnel-card-tag-remove"
+                            title="Remover tag"
+                            onClick={() => handleRemoveCardTag(context.lead.id, tag.id)}
+                          >
+                            <X className="crm-h-2.5 crm-w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                      <TagPicker
+                        availableTags={workspaceTags}
+                        currentTagIds={(context.lead.tags ?? []).map((tag) => tag.id)}
+                        onPick={(tag) => handleAddCardTag(context.lead.id, tag.name)}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="crm-rail-empty">
+                  <h4>Nenhum lead vinculado</h4>
+                  <p>Abra uma conversa com um contato salvo no CRM para editar os dados aqui.</p>
+                </div>
+              )}
             </div>
           ) : null}
 

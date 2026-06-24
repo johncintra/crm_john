@@ -1,6 +1,8 @@
 import { Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
+import type { WorkspaceTag } from '../../shared/types';
+import { TagPicker } from './TagPicker';
 import type { WhatsAppConversationItem } from '../whatsapp';
 
 export interface FunnelColumn {
@@ -57,6 +59,7 @@ interface FunnelBoardProps {
   onUpdateCardEmail?: (leadId: string, email: string) => void;
   onAddCardTag?: (leadId: string, name: string) => void;
   onRemoveCardTag?: (leadId: string, tagId: string) => void;
+  availableTags?: WorkspaceTag[];
   onMoveCard: (cardId: string, columnId: string) => void;
   onRemoveCard: (cardId: string) => void;
   onCreateColumn: (payload: { name: string; color: string }) => void;
@@ -130,6 +133,7 @@ export function FunnelBoard({
   onUpdateCardEmail,
   onAddCardTag,
   onRemoveCardTag,
+  availableTags = [],
   onMoveCard,
   onRemoveCard,
   onCreateColumn,
@@ -295,21 +299,11 @@ export function FunnelBoard({
                 </span>
               ))}
               {card.leadId && onAddCardTag ? (
-                <button
-                  type="button"
-                  className="crm-funnel-card-tag crm-funnel-card-tag-add"
-                  title="Adicionar tag"
-                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const value = window.prompt(`Nova tag para ${card.name}:`)?.trim();
-                    if (value) onAddCardTag(card.leadId!, value);
-                  }}
-                >
-                  <Plus className="crm-h-2.5 crm-w-2.5" />
-                  tag
-                </button>
+                <TagPicker
+                  availableTags={availableTags}
+                  currentTagIds={(card.tags ?? []).map((tag) => tag.id)}
+                  onPick={(tag) => onAddCardTag(card.leadId!, tag.name)}
+                />
               ) : null}
             </div>
           </div>

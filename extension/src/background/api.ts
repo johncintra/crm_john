@@ -18,7 +18,8 @@ import type {
   LeadContext,
   LoginPayload,
   MessageTemplate,
-  TaskStatus
+  TaskStatus,
+  WorkspaceTag
 } from '../shared/types';
 
 interface ApiOptions {
@@ -315,15 +316,33 @@ export async function assignContactToStage(
 }
 
 export async function updateLeadEmail(leadId: string, email: string): Promise<void> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return;
   await request(`/leads/${leadId}/email`, { method: 'PATCH', body: { email } });
 }
 
 export async function addLeadTag(leadId: string, name: string, color?: string): Promise<{ id: string; name: string; color: string | null }> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return { id: `pv-tag-${Date.now()}`, name, color: color ?? null };
   return request(`/leads/${leadId}/tags`, { method: 'POST', body: { name, color } });
 }
 
 export async function removeLeadTag(leadId: string, tagId: string): Promise<void> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return;
   await request(`/leads/${leadId}/tags/${tagId}`, { method: 'DELETE' });
+}
+
+export async function fetchWorkspaceTags(): Promise<WorkspaceTag[]> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return [];
+  return request('/workspace/tags');
+}
+
+export async function updateLeadValue(leadId: string, amount: number, currency?: string, productName?: string): Promise<void> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return;
+  await request(`/leads/${leadId}/value`, { method: 'PATCH', body: { amount, currency, productName } });
 }
 
 export async function movePipelineCard(pipelineId: string, leadId: string, stageId: string): Promise<void> {

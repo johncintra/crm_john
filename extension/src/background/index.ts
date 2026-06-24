@@ -12,6 +12,7 @@ import {
   fetchLeadMessages,
   fetchPipelineBoard,
   fetchPipelines,
+  fetchWorkspaceTags,
   fetchWorkspaceTemplates,
   getProfile,
   login,
@@ -25,6 +26,7 @@ import {
   updateLeadEmail,
   updateLeadPhone,
   updateLeadStage,
+  updateLeadValue,
   updatePipelineStage,
   updateTaskStatus
 } from './api';
@@ -72,6 +74,16 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         case 'workspace:fetch-templates': {
           const data = await fetchWorkspaceTemplates();
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'workspace:fetch-tags': {
+          const data = await fetchWorkspaceTags();
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:update-value': {
+          await updateLeadValue(message.payload.leadId, message.payload.amount, message.payload.currency, message.payload.productName);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }
         case 'lead:add-note': {
