@@ -177,15 +177,15 @@ export function SidebarApp() {
     ];
   }, [checkoutCards, dedupeAgainstLocalFunnel, isCheckoutFunnelSelected, selectedLocalFunnel]);
 
+  // The standalone Checkout funnel is hidden from the switcher — every
+  // regular funnel already surfaces its leads via the pinned
+  // Oportunidades/Compra Aprovada columns, so a dedicated view of it became
+  // redundant. The underlying checkout pipeline, webhook ingestion, and
+  // those pinned columns are untouched; this only removes the option to
+  // navigate into it directly.
   const allFunnels = useMemo(() => {
-    return [
-      ...funnels.map((funnel) => ({ id: funnel.id, name: funnel.name })),
-      {
-        id: CHECKOUT_FUNNEL_ID,
-        name: checkoutBoard?.funnel.name ?? 'Checkout'
-      }
-    ];
-  }, [checkoutBoard?.funnel.name, funnels]);
+    return funnels.map((funnel) => ({ id: funnel.id, name: funnel.name }));
+  }, [funnels]);
 
   const assignableFunnels = useMemo(() => funnels.map((funnel) => ({ id: funnel.id, name: funnel.name })), [funnels]);
 
@@ -626,7 +626,13 @@ export function SidebarApp() {
     const finalPhone = resolvedPhone ?? conversationMatch?.phone ?? null;
     const finalName = conversationMatch?.name ?? name;
 
-    let opened = await openConversationInWhatsApp(finalPhone ?? '', finalName);
+    // With no conversationMatch even after the deep scan above and a real
+    // phone in hand, this in-app search is doomed (there's no chat for it
+    // to find) and just burns ~1-2s before the reliable phone-deep-link
+    // reload further down kicks in. Skip straight to that. Still attempt
+    // it when there's no phone at all — name-based search is the only shot.
+    let opened =
+      conversationMatch || !finalPhone ? await openConversationInWhatsApp(finalPhone ?? '', finalName) : false;
 
     // openConversationByPhoneNumber's soft navigation only has a real
     // chance of being picked up when this account already has some trace
@@ -647,6 +653,7 @@ export function SidebarApp() {
     // has zero history with), so save the history lookup for after reload
     // and skip the rest of this render entirely.
     if (!opened && finalPhone && !conversationMatch) {
+      setToast('Abrindo conversa nova...');
       if (leadId) {
         await savePendingMessageHistory({ leadId, name });
       }
