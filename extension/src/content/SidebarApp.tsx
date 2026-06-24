@@ -30,6 +30,10 @@ import { TagPicker } from './components/TagPicker';
 type WorkspaceView = 'general' | 'funnel';
 type RailPanel = 'account' | 'lead' | 'templates' | 'lists' | 'calendar';
 
+const APPROVED_TAG_NAME = 'aprovado';
+const hasApprovedTag = (card: FunnelCard) =>
+  (card.tags ?? []).some((tag) => tag.name.trim().toLowerCase() === APPROVED_TAG_NAME);
+
 interface SavedFunnel {
   id: string;
   name: string;
@@ -147,15 +151,31 @@ export function SidebarApp() {
     return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: dedupeAgainstLocalFunnel(opportunities) }];
   }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
+  // Manually tagging a regular CRM card "aprovado" promotes it into the
+  // pinned Compra Aprovada column too — the card's real stage never
+  // changes, so removing/swapping the tag puts it right back where it was
+  // (see hasApprovedTag filtering boardCardsRaw below).
   const pinnedApprovedColumns = useMemo<PinnedCardColumn[]>(() => {
     // Only leads that were ever visible as an Oportunidade (or already
     // claimed into a regular CRM stage, handled by the dedupe below) count
     // here — renewals and launch sales that arrive already approved on
     // their first-ever webhook never passed through the seller's funnel,
     // so they don't belong in this column.
-    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED' && card.wasCheckoutOpportunity);
-    return [{ id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: dedupeAgainstLocalFunnel(approved) }];
-  }, [checkoutCards, dedupeAgainstLocalFunnel]);
+    const approvedFromCheckout = dedupeAgainstLocalFunnel(
+      checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED' && card.wasCheckoutOpportunity)
+    );
+    const approvedFromLocalFunnel = !isCheckoutFunnelSelected
+      ? (selectedLocalFunnel?.cards ?? []).filter(hasApprovedTag).map((card) => ({ ...card, pinnedViaTag: true }))
+      : [];
+    return [
+      {
+        id: 'pinned-compra-aprovada',
+        title: 'Compra Aprovada',
+        color: '#22c55e',
+        cards: [...approvedFromCheckout, ...approvedFromLocalFunnel]
+      }
+    ];
+  }, [checkoutCards, dedupeAgainstLocalFunnel, isCheckoutFunnelSelected, selectedLocalFunnel]);
 
   const allFunnels = useMemo(() => {
     return [
@@ -172,7 +192,12 @@ export function SidebarApp() {
   const boardColumns = isCheckoutFunnelSelected
     ? checkoutColumns
     : selectedLocalFunnel?.columns ?? [];
-  const boardCardsRaw = isCheckoutFunnelSelected ? checkoutCards : selectedLocalFunnel?.cards ?? [];
+  // A card tagged "aprovado" is shown in the pinned Compra Aprovada column
+  // instead of its own stage (see pinnedApprovedColumns) — its real stage
+  // is untouched, so it reappears here the moment the tag is removed.
+  const boardCardsRaw = isCheckoutFunnelSelected
+    ? checkoutCards
+    : (selectedLocalFunnel?.cards ?? []).filter((card) => !hasApprovedTag(card));
   const boardCards = useMemo(() => {
     if (!conversations.length) return boardCardsRaw;
     return boardCardsRaw.map((card) => {

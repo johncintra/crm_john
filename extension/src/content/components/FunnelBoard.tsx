@@ -23,6 +23,10 @@ export interface FunnelCard {
   source?: string | null;
   temperature?: string | null;
   wasCheckoutOpportunity?: boolean;
+  // True for regular CRM cards pinned into Compra Aprovada via the
+  // "aprovado" tag rather than via checkout data — not draggable out of
+  // the pinned column, since removing/swapping the tag is the correction.
+  pinnedViaTag?: boolean;
   tags?: Array<{ id: string; name: string; color?: string | null }>;
   latestOrder?: {
     id: string;
@@ -370,9 +374,9 @@ export function FunnelBoard({
           {pinnedColumn.cards.length ? (
             pinnedColumn.cards.map((card) =>
               renderCard(card, pinnedColumn.color, {
-                draggable: true,
+                draggable: !card.pinnedViaTag,
                 allowRemove: false,
-                onDragStart: () => setDraggedPinnedCard(card)
+                onDragStart: card.pinnedViaTag ? () => undefined : () => setDraggedPinnedCard(card)
               })
             )
           ) : (
