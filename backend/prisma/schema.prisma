@@ -145,6 +145,15 @@ model Lead {
   source          String?
   temperature     LeadTemperature?
   cpf             String?
+  // Denormalized snapshot of the order that originated this lead, copied
+  // over when a checkout-sourced card (Oportunidades/Compra Aprovada) is
+  // dragged into a regular funnel — that creates a separate Lead row with
+  // no Order relation of its own, so without this the card would lose its
+  // value/product/status display the moment it's claimed into a stage.
+  originAmount      Int?
+  originCurrency    String?
+  originProductName String?
+  originOrderStatus OrderStatus?
   workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pipeline        Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
   currentStage    PipelineStage?     @relation("LeadCurrentStage", fields: [currentStageId], references: [id], onDelete: SetNull)

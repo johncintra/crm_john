@@ -12,7 +12,7 @@ import {
   Query,
   UseGuards
 } from '@nestjs/common';
-import { CheckoutProvider } from '@prisma/client';
+import { CheckoutProvider, OrderStatus } from '@prisma/client';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { AuthUser } from '../auth/types/auth-user.type';
@@ -22,6 +22,8 @@ import { CreateTaskDto } from './dto/create-task.dto';
 import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { UpdateLeadStageDto } from './dto/update-lead-stage.dto';
 import { UpdateLeadPhoneDto } from './dto/update-lead-phone.dto';
+import { UpdateLeadEmailDto } from './dto/update-lead-email.dto';
+import { AddLeadTagDto } from './dto/add-lead-tag.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { PipelineCreateDto } from './dto/pipeline-create.dto';
 import { PipelineRenameDto } from './dto/pipeline-rename.dto';
@@ -115,6 +117,37 @@ export class CrmController {
     @Body() dto: UpdateLeadPhoneDto
   ) {
     return this.crmService.updateLeadPhone(user.sub, leadId, dto.phone);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('leads/:leadId/email')
+  updateLeadEmail(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: UpdateLeadEmailDto
+  ) {
+    return this.crmService.updateLeadEmail(user.sub, leadId, dto.email);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('leads/:leadId/tags')
+  addLeadTag(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: AddLeadTagDto
+  ) {
+    return this.crmService.addLeadTag(user.sub, leadId, dto.name, dto.color);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('leads/:leadId/tags/:tagId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  removeLeadTag(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Param('tagId') tagId: string
+  ) {
+    return this.crmService.removeLeadTag(user.sub, leadId, tagId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -219,7 +252,16 @@ export class CrmController {
   @UseGuards(JwtAuthGuard)
   @Post('pipelines/:id/cards')
   assignContact(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: CardAssignDto) {
-    return this.crmService.assignContactToStage(user.sub, id, dto.stageId, { name: dto.name, phone: dto.phone });
+    return this.crmService.assignContactToStage(user.sub, id, dto.stageId, {
+      name: dto.name,
+      phone: dto.phone,
+      email: dto.email,
+      tagIds: dto.tagIds,
+      originAmount: dto.originAmount,
+      originCurrency: dto.originCurrency,
+      originProductName: dto.originProductName,
+      originOrderStatus: dto.originOrderStatus as OrderStatus | undefined
+    });
   }
 
   @UseGuards(JwtAuthGuard)

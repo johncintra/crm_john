@@ -201,6 +201,48 @@ export class CrmService {
     return { ok: true };
   }
 
+  async updateLeadEmail(userId: string, leadId: string, email: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail.includes('@')) {
+      throw new BadRequestException('Invalid email.');
+    }
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { email: normalizedEmail }
+    });
+
+    return { ok: true };
+  }
+
+  async addLeadTag(userId: string, leadId: string, name: string, color?: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+    const trimmedName = name.trim();
+
+    let tag = await this.prisma.leadTag.findFirst({ where: { workspaceId, name: trimmedName } });
+    if (!tag) {
+      tag = await this.prisma.leadTag.create({ data: { workspaceId, name: trimmedName, color: color ?? null } });
+    }
+
+    await this.prisma.leadTagOnLead.upsert({
+      where: { leadId_tagId: { leadId, tagId: tag.id } },
+      create: { leadId, tagId: tag.id },
+      update: {}
+    });
+
+    return { id: tag.id, name: tag.name, color: tag.color };
+  }
+
+  async removeLeadTag(userId: string, leadId: string, tagId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+    await this.prisma.leadTagOnLead.deleteMany({ where: { leadId, tagId } });
+    return { ok: true };
+  }
+
   async syncLeadMessages(userId: string, leadId: string, messages: SyncMessageItemDto[]) {
     const workspaceId = await this.getWorkspaceId(userId);
     await this.requireLead(workspaceId, leadId);
@@ -698,7 +740,7 @@ export class CrmService {
       funnel: { id: pipeline.id, name: pipeline.name },
       columns: pipeline.stages.map((s) => ({ id: s.id, name: s.name, color: s.color ?? '#64748b', position: s.position })),
       cards: leads.map((lead) => {
-        const latestOrder = lead.orders[0] ?? null;
+        const realOrder = lead.orders[0] ?? null;
         return {
           id: lead.id,
           leadId: lead.id,
@@ -711,14 +753,16 @@ export class CrmService {
           source: lead.source,
           temperature: lead.temperature,
           tags: lead.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
-          latestOrder: latestOrder ? {
-            id: latestOrder.id,
-            productName: latestOrder.productName,
-            amount: latestOrder.amount,
-            currency: latestOrder.currency,
-            status: latestOrder.status,
-            provider: latestOrder.provider
-          } : null
+          latestOrder: realOrder
+            ? {
+                id: realOrder.id,
+                productName: realOrder.productName,
+                amount: realOrder.amount,
+                currency: realOrder.currency,
+                status: realOrder.status,
+                provider: realOrder.provider
+              }
+            : this.buildLatestOrderSnapshot(lead)
         };
       })
     };
@@ -765,29 +809,105 @@ export class CrmService {
     );
   }
 
-  async assignContactToStage(userId: string, pipelineId: string, stageId: string, contact: { name: string; phone?: string | null }) {
+  async assignContactToStage(
+    userId: string,
+    pipelineId: string,
+    stageId: string,
+    contact: {
+      name: string;
+      phone?: string | null;
+      email?: string | null;
+      tagIds?: string[];
+      originAmount?: number;
+      originCurrency?: string;
+      originProductName?: string;
+      originOrderStatus?: OrderStatus;
+    }
+  ) {
     const workspaceId = await this.getWorkspaceId(userId);
     await this.requirePipeline(workspaceId, pipelineId);
     const normalizedPhone = this.normalizePhone(contact.phone);
+    const normalizedEmail = contact.email?.trim().toLowerCase() || undefined;
+    const originFields = {
+      ...(contact.originAmount !== undefined ? { originAmount: contact.originAmount } : {}),
+      ...(contact.originCurrency ? { originCurrency: contact.originCurrency } : {}),
+      ...(contact.originProductName ? { originProductName: contact.originProductName } : {}),
+      ...(contact.originOrderStatus ? { originOrderStatus: contact.originOrderStatus } : {})
+    };
+
     let lead = normalizedPhone
       ? (await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, normalizedPhone } })) ??
         (await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } }))
       : await this.prisma.lead.findFirst({ where: { workspaceId, pipelineId, phone: null, name: contact.name } });
+
     if (lead) {
       lead = await this.prisma.lead.update({
         where: { id: lead.id },
         data: {
           currentStageId: stageId,
           name: contact.name,
-          ...(normalizedPhone ? { phone: contact.phone, normalizedPhone } : {})
+          ...(normalizedPhone ? { phone: contact.phone, normalizedPhone } : {}),
+          ...(normalizedEmail ? { email: normalizedEmail } : {}),
+          ...originFields
         }
       });
     } else {
       lead = await this.prisma.lead.create({
-        data: { workspaceId, pipelineId, name: contact.name, phone: contact.phone, normalizedPhone, currentStageId: stageId }
+        data: {
+          workspaceId,
+          pipelineId,
+          name: contact.name,
+          phone: contact.phone,
+          normalizedPhone,
+          email: normalizedEmail ?? null,
+          currentStageId: stageId,
+          ...originFields
+        }
       });
     }
-    return { id: lead.id, leadId: lead.id, name: lead.name, phone: lead.phone, email: lead.email, avatarUrl: null, columnId: stageId, source: lead.source, temperature: lead.temperature, tags: [], latestOrder: null };
+
+    if (contact.tagIds?.length) {
+      await this.prisma.leadTagOnLead.createMany({
+        data: contact.tagIds.map((tagId) => ({ leadId: lead!.id, tagId })),
+        skipDuplicates: true
+      });
+    }
+
+    const tags = await this.prisma.leadTagOnLead.findMany({
+      where: { leadId: lead.id },
+      include: { tag: true }
+    });
+
+    return {
+      id: lead.id,
+      leadId: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      email: lead.email,
+      avatarUrl: null,
+      columnId: stageId,
+      source: lead.source,
+      temperature: lead.temperature,
+      tags: tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
+      latestOrder: this.buildLatestOrderSnapshot(lead)
+    };
+  }
+
+  private buildLatestOrderSnapshot(lead: {
+    originAmount: number | null;
+    originCurrency: string | null;
+    originProductName: string | null;
+    originOrderStatus: OrderStatus | null;
+  }) {
+    if (lead.originAmount == null) return null;
+    return {
+      id: 'snapshot',
+      productName: lead.originProductName ?? '',
+      amount: lead.originAmount,
+      currency: lead.originCurrency ?? 'BRL',
+      status: lead.originOrderStatus ?? OrderStatus.OPEN,
+      provider: 'KIWIFY' as CheckoutProvider
+    };
   }
 
   async moveCard(userId: string, pipelineId: string, leadId: string, stageId: string) {
