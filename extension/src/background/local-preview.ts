@@ -152,6 +152,11 @@ export async function getPreviewLeadContext(phone: string): Promise<LeadContext>
   return created;
 }
 
+export async function getPreviewLeadContextByLeadId(leadId: string): Promise<LeadContext | null> {
+  const map = await getPreviewMap();
+  return findContextByLeadId(map, leadId)?.context ?? null;
+}
+
 export async function addPreviewLeadNote(leadId: string, content: string): Promise<void> {
   const map = await getPreviewMap();
   const found = findContextByLeadId(map, leadId);

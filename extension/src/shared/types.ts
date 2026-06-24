@@ -226,7 +226,7 @@ export type BackgroundRequest =
   | { type: 'auth:login'; payload: LoginPayload }
   | { type: 'auth:logout' }
   | { type: 'auth:update-base-url'; payload: { apiBaseUrl: string } }
-  | { type: 'lead:fetch-context'; payload: { phone: string } }
+  | { type: 'lead:fetch-context'; payload: { phone?: string | null; leadId?: string | null } }
   | { type: 'checkout:fetch-board' }
   | { type: 'workspace:fetch-templates' }
   | { type: 'workspace:fetch-tags' }

@@ -300,22 +300,31 @@ export function SidebarApp() {
     }
   }, [sendMessage]);
 
+  // Most saved WhatsApp contacts never expose a phone number passively
+  // (getCurrentConversation only finds one in the URL or when the chat
+  // title itself is a raw number) — relying on conversation.phone alone
+  // left this falling back to demo data for almost every real
+  // conversation. activeConversationCard already resolves the right
+  // board card by name/leadId even without a phone, so prefer its
+  // leadId; only show "no lead" (not fake data) when neither is known.
   const refreshLeadContext = useCallback(async () => {
-    if (!conversation.phone) {
-      setContext(demoLeadContext);
+    const leadId = activeConversationCard?.leadId ?? null;
+    const phone = conversation.phone;
+    if (!leadId && !phone) {
+      setContext(null);
       return;
     }
 
     try {
       const data = await sendMessage<LeadContext | null>({
         type: 'lead:fetch-context',
-        payload: { phone: conversation.phone }
+        payload: { phone, leadId }
       });
       setContext(data);
     } catch (error) {
       setToast(error instanceof Error ? error.message : 'Falha ao carregar lead.');
     }
-  }, [conversation.phone, sendMessage]);
+  }, [activeConversationCard?.leadId, conversation.phone, sendMessage]);
 
   useEffect(() => {
     void (async () => {

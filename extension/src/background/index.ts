@@ -62,7 +62,7 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
           return;
         }
         case 'lead:fetch-context': {
-          const data = await fetchLeadContext(message.payload.phone);
+          const data = await fetchLeadContext({ phone: message.payload.phone, leadId: message.payload.leadId });
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
           return;
         }

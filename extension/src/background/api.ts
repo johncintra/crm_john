@@ -6,6 +6,7 @@ import {
   addPreviewLeadNote,
   createPreviewLeadTask,
   getPreviewLeadContext,
+  getPreviewLeadContextByLeadId,
   getPreviewProfile,
   isPreviewSession,
   PREVIEW_API_BASE_URL,
@@ -131,26 +132,31 @@ export async function updateApiBaseUrl(apiBaseUrl: string): Promise<AuthSession>
   return nextSession;
 }
 
-export async function fetchLeadContext(phone: string): Promise<LeadContext | null> {
+export async function fetchLeadContext(params: { phone?: string | null; leadId?: string | null }): Promise<LeadContext | null> {
   const session = await getStoredSession();
   if (isPreviewSession(session)) {
-    return getPreviewLeadContext(phone);
+    if (params.leadId) {
+      return getPreviewLeadContextByLeadId(params.leadId);
+    }
+    return params.phone ? getPreviewLeadContext(params.phone) : null;
   }
 
-  const leadByPhone = await request<unknown>(`/leads/by-phone/${encodeURIComponent(phone)}`);
-  const leadRecord = (leadByPhone && typeof leadByPhone === 'object' ? leadByPhone : {}) as {
-    id?: string;
-  };
-
-  if (!leadRecord.id) {
-    return null;
+  let leadId = params.leadId ?? null;
+  if (!leadId) {
+    if (!params.phone) return null;
+    const leadByPhone = await request<unknown>(`/leads/by-phone/${encodeURIComponent(params.phone)}`);
+    const leadRecord = (leadByPhone && typeof leadByPhone === 'object' ? leadByPhone : {}) as {
+      id?: string;
+    };
+    if (!leadRecord.id) return null;
+    leadId = leadRecord.id;
   }
 
   const [lead, timeline, notes, tasks, pipeline, templates] = await Promise.all([
-    request<unknown>(`/leads/${leadRecord.id}`),
-    request<unknown>(`/leads/${leadRecord.id}/timeline`),
-    request<unknown>(`/leads/${leadRecord.id}/notes`),
-    request<unknown>(`/leads/${leadRecord.id}/tasks`),
+    request<unknown>(`/leads/${leadId}`),
+    request<unknown>(`/leads/${leadId}/timeline`),
+    request<unknown>(`/leads/${leadId}/notes`),
+    request<unknown>(`/leads/${leadId}/tasks`),
     request<unknown>('/pipelines/default'),
     request<unknown>('/templates')
   ]);
