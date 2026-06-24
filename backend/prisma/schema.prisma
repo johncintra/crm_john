@@ -154,6 +154,12 @@ model Lead {
   originCurrency    String?
   originProductName String?
   originOrderStatus OrderStatus?
+  // Sticky flag set the moment a checkout lead is ever placed in a
+  // non-approved stage (Pix Gerado, Boleto Gerado, etc). Renewals and
+  // launch sales that arrive already APPROVED on their first-ever webhook
+  // never flip this to true, which is how the pinned "Compra Aprovada"
+  // column tells a worked Oportunidade apart from a blind/automatic sale.
+  wasCheckoutOpportunity Boolean       @default(false)
   workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   pipeline        Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
   currentStage    PipelineStage?     @relation("LeadCurrentStage", fields: [currentStageId], references: [id], onDelete: SetNull)

@@ -441,6 +441,7 @@ export class CrmService {
           columnId: lead.currentStageId ?? checkoutPipeline.stages[0]?.id ?? null,
           source: lead.source,
           temperature: lead.temperature,
+          wasCheckoutOpportunity: lead.wasCheckoutOpportunity,
           tags: lead.tags.map((item) => ({
             id: item.tag.id,
             name: item.tag.name,
@@ -580,7 +581,10 @@ export class CrmService {
           cpf: dto.cpf?.trim() || lead.cpf,
           temperature: dto.temperature ?? this.temperatureFromOrderStatus(dto.status),
           pipelineId: checkoutPipeline.id,
-          currentStageId: targetStage?.id ?? lead.currentStageId
+          currentStageId: targetStage?.id ?? lead.currentStageId,
+          // Sticky — only ever flips to true (this event landed in a
+          // non-approved stage), never back to false on a later approval.
+          ...(dto.status !== OrderStatus.APPROVED ? { wasCheckoutOpportunity: true } : {})
         }
       });
 
