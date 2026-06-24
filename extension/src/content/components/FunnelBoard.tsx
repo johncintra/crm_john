@@ -22,6 +22,7 @@ export interface FunnelCard {
   leadId?: string;
   source?: string | null;
   temperature?: string | null;
+  wasCheckoutOpportunity?: boolean;
   tags?: Array<{ id: string; name: string; color?: string | null }>;
   latestOrder?: {
     id: string;

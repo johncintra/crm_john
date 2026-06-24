@@ -74,6 +74,7 @@ export interface CheckoutBoardCard {
   columnId?: string | null;
   source?: string | null;
   temperature?: string | null;
+  wasCheckoutOpportunity?: boolean;
   tags: LeadTag[];
   latestOrder?: {
     id: string;

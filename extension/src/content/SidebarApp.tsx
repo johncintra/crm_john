@@ -100,6 +100,7 @@ export function SidebarApp() {
       columnId: card.columnId ?? fallbackColumnId,
       source: card.source,
       temperature: card.temperature ?? null,
+      wasCheckoutOpportunity: card.wasCheckoutOpportunity ?? false,
       tags: (card.tags ?? []).filter((tag) => {
         const normalizedName = tag.name.trim().toLowerCase();
         return normalizedName !== 'kiwify' && normalizedName !== 'hotmart';
@@ -147,7 +148,12 @@ export function SidebarApp() {
   }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
   const pinnedApprovedColumns = useMemo<PinnedCardColumn[]>(() => {
-    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED');
+    // Only leads that were ever visible as an Oportunidade (or already
+    // claimed into a regular CRM stage, handled by the dedupe below) count
+    // here — renewals and launch sales that arrive already approved on
+    // their first-ever webhook never passed through the seller's funnel,
+    // so they don't belong in this column.
+    const approved = checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED' && card.wasCheckoutOpportunity);
     return [{ id: 'pinned-compra-aprovada', title: 'Compra Aprovada', color: '#22c55e', cards: dedupeAgainstLocalFunnel(approved) }];
   }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
