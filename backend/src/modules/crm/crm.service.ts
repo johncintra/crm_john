@@ -37,8 +37,12 @@ const CHECKOUT_TAG_NAMES = [
   'aprovado',
   'recusado',
   'reembolso',
-  'chargeback'
+  'chargeback',
+  'anuncio'
 ] as const;
+
+const AD_LEAD_STAGE_NAME = 'lead de anúncio';
+const AD_LEAD_AMOUNT_CENTS = 79600;
 
 @Injectable()
 export class CrmService {
@@ -533,11 +537,10 @@ export class CrmService {
       throw new BadRequestException('A valid phone number is required.');
     }
 
-    const targetStage = this.pickStageForOrderStatus(
-      checkoutPipeline.stages,
-      dto.status,
-      dto.paymentMethod
-    );
+    const targetStage =
+      provider === CheckoutProvider.ACTIVECAMPAIGN
+        ? checkoutPipeline.stages.find((stage) => stage.name.trim().toLowerCase() === AD_LEAD_STAGE_NAME) ?? null
+        : this.pickStageForOrderStatus(checkoutPipeline.stages, dto.status, dto.paymentMethod);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const tagRegistry = await this.loadCheckoutTags(tx, workspace.id);
@@ -719,6 +722,34 @@ export class CrmService {
       paymentMethod:
         this.extractString(payload, ['payment_method', 'order.payment_method']) ??
         'UNKNOWN',
+      metadata: payload
+    };
+  }
+
+  mapActiveCampaignWebhookPayload(payload: Record<string, unknown>): IngestCheckoutEventDto {
+    const phone =
+      this.extractString(payload, ['phone', 'contact.phone', 'contact.phone_number']) ?? '';
+
+    const firstName = this.extractString(payload, ['first_name', 'contact.first_name']);
+    const lastName = this.extractString(payload, ['last_name', 'contact.last_name']);
+    const combinedName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+    return {
+      phone,
+      name:
+        this.extractString(payload, ['name', 'contact.name', 'full_name']) ??
+        (combinedName || undefined),
+      email: this.extractString(payload, ['email', 'contact.email']) ?? undefined,
+      source: 'Anúncio (ActiveCampaign)',
+      productName: this.extractString(payload, ['product_name', 'campaign', 'ad', 'list']) ?? 'Lead de Anúncio',
+      // The ad lead's "value" is a fixed estimate of the offer being
+      // pitched, not a real order amount — there's no purchase here, only
+      // an override if the automation is ever set up to send one.
+      amount: this.extractAmount(this.extractNumberLike(payload, ['amount', 'value'])) || AD_LEAD_AMOUNT_CENTS,
+      currency: this.extractString(payload, ['currency']) ?? 'BRL',
+      status: OrderStatus.OPEN,
+      eventType: this.extractString(payload, ['event', 'event_name']) ?? 'activecampaign_lead',
+      externalId: this.extractString(payload, ['contact_id', 'contact.id', 'id']) ?? undefined,
       metadata: payload
     };
   }
@@ -1076,6 +1107,15 @@ export class CrmService {
     paymentMethod?: string | null
   ) {
     const desiredTagNames = new Set<string>();
+
+    // Ad leads aren't a real checkout event — no purchase, no payment
+    // method, no order-status outcome to react to — just the one tag
+    // marking where they came from.
+    if (provider === CheckoutProvider.ACTIVECAMPAIGN) {
+      desiredTagNames.add('anuncio');
+      return this.applyDesiredCheckoutTags(tx, leadId, tagRegistry, desiredTagNames);
+    }
+
     desiredTagNames.add(provider === CheckoutProvider.KIWIFY ? 'kiwify' : 'hotmart');
 
     const normalizedPaymentMethod = (paymentMethod ?? '').trim().toLowerCase();
@@ -1103,6 +1143,15 @@ export class CrmService {
         break;
     }
 
+    return this.applyDesiredCheckoutTags(tx, leadId, tagRegistry, desiredTagNames);
+  }
+
+  private async applyDesiredCheckoutTags(
+    tx: Prisma.TransactionClient,
+    leadId: string,
+    tagRegistry: Map<string, LeadTag>,
+    desiredTagNames: Set<string>
+  ) {
     const relevantTagIds = [...tagRegistry.values()].map((tag) => tag.id);
     await tx.leadTagOnLead.deleteMany({
       where: {

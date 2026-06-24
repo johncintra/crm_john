@@ -317,4 +317,14 @@ export class CrmController {
 
     return this.crmService.ingestCheckoutEvent(CheckoutProvider.KIWIFY, token, dto);
   }
+
+  @Post('webhooks/activecampaign/:token')
+  ingestActiveCampaignEvent(@Param('token') token: string, @Body() payload: Record<string, unknown>) {
+    const dto = this.crmService.mapActiveCampaignWebhookPayload(payload);
+    if (!dto.phone) {
+      throw new BadRequestException('Phone is required in ActiveCampaign payload.');
+    }
+
+    return this.crmService.ingestCheckoutEvent(CheckoutProvider.ACTIVECAMPAIGN, token, dto);
+  }
 }

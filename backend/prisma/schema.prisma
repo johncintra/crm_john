@@ -59,6 +59,7 @@ enum CheckoutProvider {
   KIWIFY
   HOTMART
   MANUAL
+  ACTIVECAMPAIGN
 }
 
 model User {

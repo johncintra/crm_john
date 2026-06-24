@@ -33,6 +33,7 @@ const CHECKOUT_PIPELINE: PipelineSeed = {
   isDefault: false,
   isCheckout: true,
   stages: [
+    { name: 'Lead de Anúncio', color: '#0ea5e9', position: 0 },
     { name: 'Boleto Gerado', color: '#a78bfa', position: 1 },
     { name: 'Pix Gerado', color: '#06b6d4', position: 2 },
     { name: 'Carrinho Abandonado', color: '#94a3b8', position: 3 },
@@ -44,6 +45,8 @@ const CHECKOUT_PIPELINE: PipelineSeed = {
   ]
 };
 
+const AD_LEAD_STAGE_NAME = 'Lead de Anúncio';
+
 const CHECKOUT_TAGS = [
   { name: 'kiwify', color: '#3b82f6' },
   { name: 'hotmart', color: '#f97316' },
@@ -53,7 +56,8 @@ const CHECKOUT_TAGS = [
   { name: 'recusado', color: '#ef4444' },
   { name: 'reembolso', color: '#f59e0b' },
   { name: 'chargeback', color: '#7c3aed' },
-  { name: 'perdido', color: '#94a3b8' }
+  { name: 'perdido', color: '#94a3b8' },
+  { name: 'anuncio', color: '#0ea5e9' }
 ];
 
 const DEFAULT_TEMPLATES: Array<{ title: string; category: TemplateCategory; content: string }> = [
@@ -76,8 +80,15 @@ const DEFAULT_TEMPLATES: Array<{ title: string; category: TemplateCategory; cont
 
 export async function ensureWorkspaceDefaultCrmSetup(db: DbClient, workspaceId: string) {
   const generalPipeline = await ensurePipeline(db, workspaceId, GENERAL_PIPELINE);
-  const checkoutPipeline = await ensurePipeline(db, workspaceId, CHECKOUT_PIPELINE);
+  let checkoutPipeline = await ensurePipeline(db, workspaceId, CHECKOUT_PIPELINE);
   await migrateLegacyCheckoutStages(db, checkoutPipeline.id);
+  const createdAdLeadStage = await ensureAdLeadStage(db, checkoutPipeline.id);
+  if (createdAdLeadStage) {
+    checkoutPipeline = await db.pipeline.findUniqueOrThrow({
+      where: { id: checkoutPipeline.id },
+      include: { stages: { orderBy: { position: 'asc' } } }
+    });
+  }
 
   await ensureCheckoutTags(db, workspaceId);
   await ensureDefaultTemplates(db, workspaceId);
@@ -128,6 +139,33 @@ async function ensurePipeline(db: DbClient, workspaceId: string, seed: PipelineS
       }
     }
   });
+}
+
+// Stage seeding only runs once, at pipeline creation — a workspace whose
+// checkout pipeline already existed before this stage was introduced needs
+// it added on demand instead, so its ad leads have somewhere stable to live.
+async function ensureAdLeadStage(db: DbClient, checkoutPipelineId: string): Promise<boolean> {
+  const existing = await db.pipelineStage.findFirst({
+    where: { pipelineId: checkoutPipelineId, name: AD_LEAD_STAGE_NAME }
+  });
+
+  if (existing) {
+    return false;
+  }
+
+  const stages = await db.pipelineStage.findMany({ where: { pipelineId: checkoutPipelineId } });
+  const minPosition = stages.reduce((min, stage) => Math.min(min, stage.position), 0);
+
+  await db.pipelineStage.create({
+    data: {
+      pipelineId: checkoutPipelineId,
+      name: AD_LEAD_STAGE_NAME,
+      color: '#0ea5e9',
+      position: minPosition - 1
+    }
+  });
+
+  return true;
 }
 
 async function ensureCheckoutTags(db: DbClient, workspaceId: string) {
