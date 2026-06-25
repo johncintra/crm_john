@@ -94,21 +94,25 @@ function createFooterButton() {
     width: 46px;
     height: 46px;
     border-radius: 50%;
-    border: none;
-    background: #075e54;
+    border: 2px solid white;
+    background: #7c3aed;
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
     position: fixed;
     cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.45);
     transition: background 0.15s ease, opacity 0.15s ease;
     z-index: 40;
   `;
 
-  button.addEventListener('mouseenter', () => { button!.style.background = '#087c6d'; });
-  button.addEventListener('mouseleave', () => { button!.style.background = '#075e54'; });
+  // Bright violet, distinct from WhatsApp's own dark-theme green message
+  // bubbles (#075e54-ish) — the button blended into the background almost
+  // invisibly with that color, which is most of why it went unnoticed in
+  // testing even though it was rendering correctly the whole time.
+  button.addEventListener('mouseenter', () => { button!.style.background = '#8b5cf6'; });
+  button.addEventListener('mouseleave', () => { button!.style.background = '#7c3aed'; });
   button.innerHTML =
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
     '<path d="M12 3C11.4477 3 11 3.44772 11 4V13.5858L8.70711 11.2929C8.31658 10.9024 7.68342 10.9024 7.29289 11.2929C6.90237 11.6834 6.90237 12.3166 7.29289 12.7071L11.2929 16.7071C11.6834 17.0976 12.3166 17.0976 12.7071 16.7071L16.7071 12.7071C17.0976 12.3166 17.0976 11.6834 16.7071 11.2929C16.3166 10.9024 15.6834 10.9024 15.2929 11.2929L13 13.5858V4C13 3.44772 12.5523 3 12 3Z" fill="white"/>' +
@@ -159,32 +163,47 @@ function logPlacement(message: string) {
   console.log('[CRM audio]', message);
 }
 
+// WhatsApp's own DOM mutates almost continuously (read receipts,
+// timestamps, typing indicators), which re-triggers placement on every
+// settle of the observer below. Skipping writes when the new position is
+// within a few px of the current one stops the button from visibly
+// jittering/drifting in place during normal chat activity.
+const POSITION_CHANGE_THRESHOLD_PX = 3;
+
+function applyPosition(button: HTMLButtonElement, left: number, top: number, opacity: string) {
+  const currentLeft = parseFloat(button.style.left || '0');
+  const currentTop = parseFloat(button.style.top || '0');
+  if (Math.abs(currentLeft - left) < POSITION_CHANGE_THRESHOLD_PX && Math.abs(currentTop - top) < POSITION_CHANGE_THRESHOLD_PX) {
+    return;
+  }
+  button.style.left = `${left}px`;
+  button.style.top = `${top}px`;
+  button.style.opacity = opacity;
+}
+
 function placeButtonOverMic(button: HTMLButtonElement) {
   const micButton = findMicButton();
   const footer = getComposerFooter();
 
   if (micButton) {
     const rect = micButton.getBoundingClientRect();
-    const left = rect.left + rect.width / 2 - 23;
-    const top = rect.top - 58;
+    const left = Math.max(8, Math.min(window.innerWidth - 54, rect.left + rect.width / 2 - 23));
+    const top = Math.max(8, rect.top - 58);
     logPlacement(`mic encontrado, rect=${JSON.stringify(rect)} -> botao left=${left} top=${top}`);
 
-    button.style.left = `${Math.max(8, Math.min(window.innerWidth - 54, left))}px`;
-    button.style.top = `${Math.max(8, top)}px`;
     button.style.right = 'auto';
     button.style.bottom = 'auto';
-    button.style.opacity = '1';
+    applyPosition(button, left, top, '1');
     return;
   }
 
   if (footer) {
     const rect = footer.getBoundingClientRect();
     logPlacement(`mic NAO encontrado, usando footer rect=${JSON.stringify(rect)}`);
-    button.style.left = 'auto';
     button.style.right = '18px';
-    button.style.top = `${Math.max(8, rect.top - 56)}px`;
     button.style.bottom = 'auto';
-    button.style.opacity = '0.95';
+    const left = parseFloat(button.style.left || '0') || window.innerWidth - 64;
+    applyPosition(button, left, Math.max(8, rect.top - 56), '0.95');
     return;
   }
 
