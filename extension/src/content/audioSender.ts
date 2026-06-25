@@ -195,6 +195,22 @@ function applyPosition(button: HTMLButtonElement, left: number, top: number, opa
   button.style.opacity = opacity;
 }
 
+// Our own sidebar renders a vertical icon rail pinned to the right edge
+// of the viewport (.crm-right-rail-icons, 46px wide — wider still, 348px,
+// once the seller opens it) inside a container stacked far above normal
+// page content (z-index ~2^31). WhatsApp's own layout is padded to never
+// render under that strip, but our button is a sibling appended straight
+// to document.body — nothing stops ITS calculated position from landing
+// underneath it, where that strip's near-opaque background paints right
+// over it. This was the actual reason it kept "disappearing": the
+// mic-centered position routinely fell partly or fully behind our own
+// rail icons.
+function getMaxButtonLeft(): number {
+  const railOpen = document.body.classList.contains('crm-john-rail-open');
+  const reservedRightWidth = railOpen ? 348 : 46;
+  return window.innerWidth - reservedRightWidth - 46 - 8;
+}
+
 function placeButtonOverMic(button: HTMLButtonElement) {
   // The "+" attach button is always rendered at a predictable spot near
   // the left of the composer, regardless of window width — unlike the mic
@@ -205,14 +221,15 @@ function placeButtonOverMic(button: HTMLButtonElement) {
   const attachButton = findAttachButton();
   const micButton = findMicButton();
   const footer = getComposerFooter();
+  const maxLeft = getMaxButtonLeft();
 
   if (attachButton) {
     const rect = attachButton.getBoundingClientRect();
-    const left = Math.max(8, rect.left + rect.width / 2 - 23);
+    const left = Math.max(8, Math.min(maxLeft, rect.left + rect.width / 2 - 23));
     const top = Math.max(8, rect.top - 58);
     const composeRect = getMessageComposeBox()?.getBoundingClientRect();
     logPlacement(
-      `anexar encontrado, rect=${JSON.stringify(rect)} composeBoxRect=${JSON.stringify(composeRect)} -> botao left=${left} top=${top}`
+      `anexar encontrado, rect=${JSON.stringify(rect)} composeBoxRect=${JSON.stringify(composeRect)} maxLeft=${maxLeft} -> botao left=${left} top=${top}`
     );
 
     button.style.right = 'auto';
@@ -223,9 +240,9 @@ function placeButtonOverMic(button: HTMLButtonElement) {
 
   if (micButton) {
     const rect = micButton.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - 54, rect.left + rect.width / 2 - 23));
+    const left = Math.max(8, Math.min(maxLeft, rect.left + rect.width / 2 - 23));
     const top = Math.max(8, rect.top - 58);
-    logPlacement(`mic encontrado, rect=${JSON.stringify(rect)} -> botao left=${left} top=${top}`);
+    logPlacement(`mic encontrado, rect=${JSON.stringify(rect)} maxLeft=${maxLeft} -> botao left=${left} top=${top}`);
 
     button.style.right = 'auto';
     button.style.bottom = 'auto';
@@ -235,10 +252,10 @@ function placeButtonOverMic(button: HTMLButtonElement) {
 
   if (footer) {
     const rect = footer.getBoundingClientRect();
-    logPlacement(`mic NAO encontrado, usando footer rect=${JSON.stringify(rect)}`);
-    button.style.right = '18px';
+    logPlacement(`mic NAO encontrado, usando footer rect=${JSON.stringify(rect)} maxLeft=${maxLeft}`);
+    button.style.right = 'auto';
     button.style.bottom = 'auto';
-    const left = parseFloat(button.style.left || '0') || window.innerWidth - 64;
+    const left = Math.max(8, Math.min(maxLeft, parseFloat(button.style.left || '0') || maxLeft));
     applyPosition(button, left, Math.max(8, rect.top - 56), '0.95');
     return;
   }
@@ -246,12 +263,11 @@ function placeButtonOverMic(button: HTMLButtonElement) {
   const composeBox = getMessageComposeBox();
   if (composeBox) {
     const rect = composeBox.getBoundingClientRect();
-    logPlacement(`mic e footer NAO encontrados, usando compose box rect=${JSON.stringify(rect)}`);
-    button.style.left = 'auto';
-    button.style.right = '18px';
-    button.style.top = `${Math.max(8, rect.top - 56)}px`;
+    logPlacement(`mic e footer NAO encontrados, usando compose box rect=${JSON.stringify(rect)} maxLeft=${maxLeft}`);
+    button.style.right = 'auto';
     button.style.bottom = 'auto';
-    button.style.opacity = '0.95';
+    const left = Math.max(8, maxLeft);
+    applyPosition(button, left, Math.max(8, rect.top - 56), '0.95');
   } else {
     logPlacement('mic, footer e compose box NAO encontrados, botao nao reposicionado');
   }
