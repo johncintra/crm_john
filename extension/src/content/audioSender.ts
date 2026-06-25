@@ -45,6 +45,18 @@ export function initAudioSender() {
   createHiddenFileInput();
   createFooterButton();
   observeFooter();
+
+  // Temporary catch-all to confirm the MAIN-world bridge script
+  // (audio-sender-bridge.js) is actually loaded and responding at all,
+  // regardless of which specific message type we're expecting at any
+  // given moment.
+  window.addEventListener('message', (event) => {
+    if (event.source !== window || !event.data?.type) return;
+    if (typeof event.data.type === 'string' && event.data.type.startsWith('WAS_')) {
+      // eslint-disable-next-line no-console
+      console.log('[CRM audio] mensagem recebida da ponte:', event.data.type, event.data);
+    }
+  });
 }
 
 function createHiddenFileInput() {
@@ -384,14 +396,24 @@ function findMicButton(): HTMLElement | null {
 }
 
 async function sendAudioFromFile(file: File) {
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] sendAudioFromFile iniciado, bridgeReady=', bridgeReady);
   await ensureVoiceBridge();
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] bridge confirmada pronta, convertendo arquivo...');
   const mediaInfo = await fileToMediaInfo(file);
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] arquivo convertido, mimetype=', mediaInfo.mimetype, 'tamanho=', mediaInfo.filesize);
   showToast('Convertendo e enviando como audio gravado...', 'info');
   await sendVoiceMediaViaBridge(mediaInfo);
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] sendVoiceMediaViaBridge resolveu com sucesso');
 }
 
 function ensureVoiceBridge(): Promise<void> {
   if (bridgeReady) return Promise.resolve();
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] aguardando WAS_BRIDGE_READY da ponte...');
   return waitForBridgeEvent('WAS_BRIDGE_READY', 3000).then(() => {
     bridgeReady = true;
   });
@@ -475,7 +497,7 @@ function showToast(message: string, type: 'info' | 'success' | 'error' = 'info')
       position: fixed;
       bottom: 110px;
       right: 20px;
-      z-index: 41;
+      z-index: 2147483000;
       padding: 12px 16px;
       border-radius: 12px;
       font-size: 14px;
