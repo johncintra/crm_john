@@ -412,9 +412,17 @@ async function sendAudioFromFile(file: File) {
 
 function ensureVoiceBridge(): Promise<void> {
   if (bridgeReady) return Promise.resolve();
+  // audio-sender-bridge.js (world: MAIN) fires its one-time WAS_BRIDGE_READY
+  // at document_start, way before this script (document_idle) ever starts
+  // listening — that first notification is long gone by the time we get
+  // here, so just waiting for it times out every time. Pinging makes the
+  // already-loaded bridge respond with a fresh WAS_BRIDGE_READY right now
+  // instead (see audio-sender-bridge.js's WAS_BRIDGE_PING handler).
   // eslint-disable-next-line no-console
-  console.log('[CRM audio] aguardando WAS_BRIDGE_READY da ponte...');
-  return waitForBridgeEvent('WAS_BRIDGE_READY', 3000).then(() => {
+  console.log('[CRM audio] enviando WAS_BRIDGE_PING e aguardando resposta...');
+  const readyPromise = waitForBridgeEvent('WAS_BRIDGE_READY', 3000);
+  window.postMessage({ type: 'WAS_BRIDGE_PING' }, '*');
+  return readyPromise.then(() => {
     bridgeReady = true;
   });
 }
