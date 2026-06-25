@@ -15,6 +15,57 @@ const SEARCH_BOX_SELECTORS = [
   'div[role="textbox"][contenteditable="true"][data-tab="3"]'
 ];
 
+const COMPOSE_BOX_SELECTORS = [
+  'footer [contenteditable="true"][role="textbox"]',
+  '[data-testid="conversation-compose-box-input"]',
+  'div[contenteditable="true"][data-tab]'
+];
+
+export function getMessageComposeBox(): HTMLElement | null {
+  return COMPOSE_BOX_SELECTORS
+    .map((selector) => document.querySelector(selector))
+    .find((node): node is HTMLElement => node instanceof HTMLElement) ?? null;
+}
+
+// Replaces the trailing "/shortcut" the seller just typed with the macro's
+// full content — collapses the selection to the end of the box, then
+// extends it backward by the slash command's own length so
+// execCommand('insertText', ...) overwrites exactly that span instead of
+// just appending after it.
+export function replaceComposerSlashCommand(typedLength: number, replacement: string): boolean {
+  const element = getMessageComposeBox();
+  if (!element) {
+    return false;
+  }
+
+  element.focus();
+  const selection = window.getSelection();
+  if (!selection) {
+    return false;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
+
+  for (let i = 0; i < typedLength; i += 1) {
+    selection.modify('extend', 'backward', 'character');
+  }
+
+  const inserted = document.execCommand?.('insertText', false, replacement) ?? false;
+  if (inserted) {
+    return true;
+  }
+
+  element.textContent = replacement;
+  element.dispatchEvent(
+    new InputEvent('input', { bubbles: true, cancelable: true, data: replacement, inputType: 'insertText' })
+  );
+  return true;
+}
+
 export function getCurrentConversation(): CurrentConversation {
   const url = new URL(window.location.href);
   const fromQuery = url.searchParams.get('phone');

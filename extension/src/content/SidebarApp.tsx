@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Contact, LayoutPanelTop, ListTodo, MessageSquareText, UserCircle2, X } from 'lucide-react';
 import { demoLeadContext } from './demo-data';
 import { useBackground } from './hooks/useBackground';
+import { useMacroAutocomplete } from './hooks/useMacroAutocomplete';
 import { useWhatsAppConversation } from './hooks/useWhatsAppConversation';
 import { useWhatsAppConversationList } from './hooks/useWhatsAppConversationList';
 import { copyToClipboard, formatCurrency, normalizePhone } from '../shared/utils';
@@ -1082,6 +1084,9 @@ export function SidebarApp() {
       .catch(() => setToast('Erro ao excluir macro.'));
   };
 
+  const macroAutocomplete = useMacroAutocomplete(macros);
+  const composeBoxRect = macroAutocomplete.isOpen ? macroAutocomplete.composeBox?.getBoundingClientRect() : undefined;
+
   const activePanelTitle =
     railPanel === 'account'
       ? 'Minha Conta'
@@ -1442,6 +1447,31 @@ export function SidebarApp() {
           onDelete={handleDeleteMacro}
         />
       ) : null}
+
+      {macroAutocomplete.isOpen && composeBoxRect
+        ? createPortal(
+            <div
+              className="crm-fixed crm-z-50 crm-w-72 crm-overflow-hidden crm-rounded-2xl crm-border crm-border-white/10 crm-bg-slate-950 crm-shadow-2xl"
+              style={{ left: composeBoxRect.left, bottom: window.innerHeight - composeBoxRect.top + 8 }}
+            >
+              {macroAutocomplete.matches.map((macro, index) => (
+                <button
+                  key={macro.id}
+                  type="button"
+                  className={`crm-flex crm-w-full crm-flex-col crm-items-start crm-gap-0.5 crm-px-3 crm-py-2 crm-text-left ${
+                    index === macroAutocomplete.selectedIndex ? 'crm-bg-white/10' : ''
+                  }`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => macroAutocomplete.selectMacro(macro)}
+                >
+                  <span className="crm-text-sm crm-font-semibold crm-text-accent-300">/{macro.shortcut}</span>
+                  <span className="crm-w-full crm-truncate crm-text-xs crm-text-slate-400">{macro.content}</span>
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
