@@ -104,8 +104,16 @@ function createFooterButton() {
     cursor: pointer;
     box-shadow: 0 2px 10px rgba(0,0,0,0.45);
     transition: background 0.15s ease, opacity 0.15s ease;
-    z-index: 40;
+    z-index: 2147483000;
   `;
+  // Confirmed via elementFromPoint(): WhatsApp's own virtualized message
+  // list renders a row that wins paint order over this button at z-index
+  // 40, despite the button being position: fixed — some ancestor of that
+  // list creates a stacking context effectively above plain z-index:40
+  // siblings of <body> (likely a transform-based virtualization layer).
+  // Matching #crm-whatsapp-sidebar-root's own near-max z-index beats that
+  // unconditionally; isOwnModalOpen() below hides the button while one of
+  // our own modals is open so it can never paint over those instead.
 
   // Bright violet, distinct from WhatsApp's own dark-theme green message
   // bubbles (#075e54-ish) — the button blended into the background almost
@@ -209,6 +217,17 @@ function isActuallyVisible(el: Element): boolean {
   return el instanceof HTMLElement && el.offsetParent !== null && getComputedStyle(el).display !== 'none';
 }
 
+// The audio button's z-index is now near the maximum possible value (see
+// createFooterButton) so it can beat WhatsApp's own internals — but that
+// means it would just as easily paint over our own modals if one happens
+// to be open and overlapping. Hiding it whenever any of ours is open
+// avoids that without needing a z-index value carefully threaded between
+// "beats WhatsApp" and "loses to our own UI", which isn't possible with a
+// single number when WhatsApp's effective stacking can vary.
+function isOwnModalOpen(): boolean {
+  return Array.from(document.querySelectorAll('.crm-modal-backdrop, .crm-funnel-overlay')).some(isActuallyVisible);
+}
+
 function getMaxButtonLeft(): number {
   // Measure the real, currently-rendered left edge of our own rail
   // panel/icons instead of assuming a fixed width from a class name —
@@ -227,6 +246,12 @@ function getMaxButtonLeft(): number {
 }
 
 function placeButtonOverMic(button: HTMLButtonElement) {
+  if (isOwnModalOpen()) {
+    button.style.display = 'none';
+    return;
+  }
+  button.style.display = 'flex';
+
   // The "+" attach button is always rendered at a predictable spot near
   // the left of the composer, regardless of window width — unlike the mic
   // button, which can shift or disappear entirely once the chat gets
