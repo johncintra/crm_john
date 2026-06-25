@@ -339,9 +339,9 @@ export function FunnelBoard({
             <button
               type="button"
               className="crm-funnel-card-remove"
-              title="Remover contato"
+              title="Excluir lead"
               onClick={() => {
-                const confirmed = window.confirm(`Deseja remover "${card.name}" desta etapa?`);
+                const confirmed = window.confirm(`Excluir "${card.name}" definitivamente? Essa acao nao pode ser desfeita.`);
                 if (confirmed) onRemoveCard(card.id);
               }}
             >

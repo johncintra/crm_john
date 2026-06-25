@@ -732,6 +732,8 @@ body.crm-john-rail-open .crm-stagebar {
 }
 
 .crm-funnel-dot {
+  display: inline-block;
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
   border-radius: 999px;

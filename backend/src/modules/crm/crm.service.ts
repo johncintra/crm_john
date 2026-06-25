@@ -1081,7 +1081,12 @@ export class CrmService {
   async removeCard(userId: string, pipelineId: string, leadId: string) {
     const workspaceId = await this.getWorkspaceId(userId);
     await this.requirePipeline(workspaceId, pipelineId);
-    await this.prisma.lead.update({ where: { id: leadId }, data: { currentStageId: null } });
+    // Deletes for real (not just clearing currentStageId) — this is the
+    // regular-funnel "X", scoped to its own pipeline/workspace as a safety
+    // check. Pinned Oportunidades/Compra Aprovada cards never show this
+    // button (allowRemove: false there), so this only ever runs for a
+    // lead the seller is actively managing in a real stage.
+    await this.prisma.lead.deleteMany({ where: { id: leadId, workspaceId, pipelineId } });
   }
 
   private async requirePipeline(workspaceId: string, pipelineId: string) {

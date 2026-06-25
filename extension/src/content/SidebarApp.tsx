@@ -1001,8 +1001,8 @@ export function SidebarApp() {
     const leadId = card?.leadId ?? cardId;
     setFunnels((previous) => previous.map((f) => f.id !== selectedLocalFunnel.id ? f : { ...f, cards: f.cards.filter((c) => c.id !== cardId) }));
     void sendMessage({ type: 'pipeline:remove-card', payload: { pipelineId: selectedLocalFunnel.id, leadId } })
-      .catch(() => setToast('Erro ao remover card no servidor.'));
-    setToast('Contato removido da etapa.');
+      .catch(() => setToast('Erro ao excluir lead no servidor.'));
+    setToast('Lead excluido.');
   };
 
   const handleReorderColumns = (columnId: string, targetColumnId: string) => {
