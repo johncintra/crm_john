@@ -39,5 +39,8 @@ if (document.readyState === 'loading') {
   mountSidebar();
 }
 
-// Self-contained, unrelated to the React sidebar above — see audioSender.ts.
-initAudioSender();
+// Temporarily disabled — it was blocking clicks on WhatsApp's own native
+// mic/record-audio button. Re-enable once the positioning/hit-testing is
+// fixed (see audioSender.ts).
+// initAudioSender();
+void initAudioSender;
