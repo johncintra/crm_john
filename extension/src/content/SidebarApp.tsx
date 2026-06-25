@@ -152,7 +152,7 @@ export function SidebarApp() {
 
   const pinnedOpportunityColumns = useMemo<PinnedCardColumn[]>(() => {
     const opportunities = checkoutCards.filter((card) => card.latestOrder?.status !== 'APPROVED');
-    return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: dedupeAgainstLocalFunnel(opportunities) }];
+    return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#94a3b8', cards: dedupeAgainstLocalFunnel(opportunities) }];
   }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
   // Manually tagging a regular CRM card "aprovado"/"reembolso"/"chargeback"
