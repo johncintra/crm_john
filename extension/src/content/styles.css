@@ -446,13 +446,18 @@ body.crm-john-rail-open .crm-stagebar {
   flex-direction: column;
   gap: 10px;
   flex: 0 1 340px;
-  min-width: 280px;
+  min-width: 0;
 }
 
 .crm-funnel-header-right-top {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.crm-funnel-header-right-top .crm-funnel-btn {
+  flex-shrink: 0;
 }
 
 /* Single scrolling line instead of wrapping — with 10 checkout tags now
@@ -481,7 +486,8 @@ body.crm-john-rail-open .crm-stagebar {
 }
 
 .crm-funnel-select {
-  min-width: 290px;
+  min-width: 0;
+  flex: 1 1 auto;
   height: 42px;
   border-radius: calc(var(--crm-radius) * 0.96);
   border: 1px solid oklch(var(--crm-border) / 0.7);
@@ -496,6 +502,8 @@ body.crm-john-rail-open .crm-stagebar {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
   color: oklch(var(--crm-foreground) / 0.9);
   font-size: 14px;
   font-weight: 700;
