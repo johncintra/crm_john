@@ -1058,17 +1058,10 @@ export function SidebarApp() {
       <div className={`crm-top-toolbar ${workspaceView === 'general' ? 'is-hidden' : ''}`}>
         <button
           type="button"
-          onClick={() => setWorkspaceView('funnel')}
+          onClick={() => setWorkspaceView('general')}
           className={`crm-top-toolbar-btn ${workspaceView === 'funnel' ? 'is-active' : ''}`}
         >
           Funil CRM
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceView('general')}
-          className={`crm-top-toolbar-btn ${workspaceView === 'general' ? 'is-active' : ''}`}
-        >
-          CRM General
         </button>
       </div>
 
