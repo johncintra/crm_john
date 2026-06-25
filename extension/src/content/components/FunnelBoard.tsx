@@ -466,6 +466,11 @@ export function FunnelBoard({
         <div className="crm-funnel-panel crm-scrollbar">
 
           {/* ── Header ── */}
+          {/* Left: funnel identity + global actions. Right: funnel
+              switcher/search/tag-filters, stacked in their own column. The
+              two sides never mix — keep new header controls in the side
+              that already matches their purpose instead of restructuring
+              this again. */}
           <div className="crm-funnel-header">
             <div className="crm-funnel-title-row">
               <div>
@@ -479,34 +484,36 @@ export function FunnelBoard({
                 <MessageCircle className="crm-h-4 crm-w-4" />
                 Conversas
               </button>
-            </div>
-            <div className="crm-funnel-actions">
-              <label className="crm-funnel-select-wrap">
-                <span>Funil:</span>
-                <select
-                  className="crm-funnel-select"
-                  value={selectedFunnelId}
-                  onChange={(event) => onSelectFunnel(event.target.value)}
-                >
-                  {funnels.map((funnel) => (
-                    <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" className="crm-funnel-btn crm-funnel-btn-primary" onClick={onCreateFunnel}>
-                <Plus className="crm-h-4 crm-w-4" />
-                Criar Funil
+              <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onConfigureFunnel}>
+                Configurar
               </button>
+            </div>
+
+            <div className="crm-funnel-header-right">
+              <div className="crm-funnel-header-right-top">
+                <label className="crm-funnel-select-wrap">
+                  <span>Funil:</span>
+                  <select
+                    className="crm-funnel-select"
+                    value={selectedFunnelId}
+                    onChange={(event) => onSelectFunnel(event.target.value)}
+                  >
+                    {funnels.map((funnel) => (
+                      <option key={funnel.id} value={funnel.id}>{funnel.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="crm-funnel-btn crm-funnel-btn-primary" onClick={onCreateFunnel}>
+                  <Plus className="crm-h-4 crm-w-4" />
+                  Criar Funil
+                </button>
+              </div>
               <input
                 className="crm-funnel-search"
                 placeholder="Buscar contatos..."
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
-              {/* flex-basis: 100% forces everything after it (Configurar) onto
-                  a new wrapped line, so this filter row lands directly under
-                  the search input above instead of trailing after the other
-                  buttons — without pulling the search input out of this bar. */}
               {availableTags.length ? (
                 <div className="crm-funnel-tag-filters">
                   {availableTags.map((tag) => {
@@ -530,9 +537,6 @@ export function FunnelBoard({
                   })}
                 </div>
               ) : null}
-              <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onConfigureFunnel}>
-                Configurar
-              </button>
             </div>
           </div>
 

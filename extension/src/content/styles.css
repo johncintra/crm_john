@@ -441,11 +441,18 @@ body.crm-john-rail-open .crm-stagebar {
   font-size: 13px;
 }
 
-.crm-funnel-actions {
+.crm-funnel-header-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 280px;
+}
+
+.crm-funnel-header-right-top {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
 /* Single scrolling line instead of wrapping — with 10 checkout tags now
