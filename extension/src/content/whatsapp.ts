@@ -936,9 +936,16 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
   }
 
   let phone: string | null = null;
+  // Polls fast (every 80ms) so the panel is open for as little time as
+  // possible. Once it actually has content, give up quickly (6 more
+  // checks, ~480ms) if no phone shows up rather than grinding through
+  // every remaining attempt — most of the original 4s budget was spent
+  // sitting on an already-rendered panel that simply had no number to
+  // find (hidden number, @lid contact, etc).
+  let attemptsSincePanelHadContent = 0;
 
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    await new Promise((resolve) => window.setTimeout(resolve, 250));
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 80));
 
     const panel = document.querySelector<HTMLElement>('[data-testid="drawer-right"]');
     if (!panel) {
@@ -956,6 +963,13 @@ export async function getRealContactPhoneNumber(): Promise<string | null> {
     if (newPhones.length) {
       phone = newPhones[0];
       break;
+    }
+
+    if ((panel.textContent ?? '').trim().length > 20) {
+      attemptsSincePanelHadContent += 1;
+      if (attemptsSincePanelHadContent >= 6) {
+        break;
+      }
     }
   }
 
