@@ -153,6 +153,20 @@ function observeFooter() {
     const button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
     if (button) placeButtonOverMic(button);
   });
+
+  // Safety net: MutationObserver should catch every relevant DOM change,
+  // but relying on that alone means any missed mutation (or one outside
+  // the watched attributeFilter) leaves the button sitting at a stale
+  // position indefinitely, with nothing forcing a re-check. A cheap
+  // periodic recompute means it always self-corrects within ~1.5s.
+  window.setInterval(() => {
+    const button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
+    if (button) {
+      placeButtonOverMic(button);
+    } else {
+      createFooterButton();
+    }
+  }, 1500);
 }
 
 let lastPlacementLog = '';
