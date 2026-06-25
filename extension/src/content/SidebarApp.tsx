@@ -1277,8 +1277,12 @@ export function SidebarApp() {
                     <p className="crm-mt-1 crm-text-sm crm-text-white">
                       {context.lead.latestOrder ? (
                         <>
-                          {formatCurrency(context.lead.latestOrder.amount, context.lead.latestOrder.currency)}
-                          {context.lead.latestOrder.productName ? ` · ${context.lead.latestOrder.productName}` : ''}
+                          {context.lead.latestOrder.amount > 0
+                            ? formatCurrency(context.lead.latestOrder.amount, context.lead.latestOrder.currency)
+                            : ''}
+                          {context.lead.latestOrder.productName
+                            ? `${context.lead.latestOrder.amount > 0 ? ' · ' : ''}${context.lead.latestOrder.productName}`
+                            : ''}
                         </>
                       ) : (
                         <span className="crm-text-slate-500 crm-italic">Valor: N/D</span>

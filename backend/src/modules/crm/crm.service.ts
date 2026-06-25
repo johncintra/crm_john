@@ -503,7 +503,10 @@ export class CrmService {
       data: {
         originAmount: value.amount,
         originCurrency: value.currency ?? 'BRL',
-        originProductName: value.productName ?? null
+        // Only touch the product name if a new one was actually given —
+        // editing just the amount shouldn't wipe out a name that was
+        // already there (e.g. the workspace's default).
+        ...(value.productName ? { originProductName: value.productName } : {})
       }
     });
 
@@ -603,14 +606,11 @@ export class CrmService {
           }
         }));
 
-      // Each workspace maps to one Kiwify account/product — the real
-      // product being sold there is fixed, regardless of whatever title
-      // Kiwify sends, so a configured default always wins over the
-      // payload. Ad leads keep their own distinct "Lead de Anúncio" name.
-      const effectiveProductName =
-        provider !== CheckoutProvider.ACTIVECAMPAIGN && workspace.defaultProductName
-          ? workspace.defaultProductName
-          : dto.productName;
+      // Each workspace maps to one product — the real thing being sold
+      // there is fixed, regardless of whatever title the source (Kiwify,
+      // an ad lead, ...) sends, so a configured default always wins over
+      // the payload, for every provider.
+      const effectiveProductName = workspace.defaultProductName ?? dto.productName;
 
       const nextOrder = order
         ? await tx.order.update({
@@ -908,6 +908,7 @@ export class CrmService {
     }
   ) {
     const workspaceId = await this.getWorkspaceId(userId);
+    const workspace = await this.requireWorkspace(workspaceId);
     await this.requirePipeline(workspaceId, pipelineId);
     const normalizedPhone = this.normalizePhone(contact.phone);
     const normalizedEmail = contact.email?.trim().toLowerCase() || undefined;
@@ -935,6 +936,10 @@ export class CrmService {
         }
       });
     } else {
+      // A workspace with only one product knows the answer to "what is
+      // this lead worth" before any value is ever entered — every card
+      // created here, regardless of source, should say so by default.
+      const defaultProductName = contact.originProductName ?? workspace.defaultProductName ?? undefined;
       lead = await this.prisma.lead.create({
         data: {
           workspaceId,
@@ -944,7 +949,8 @@ export class CrmService {
           normalizedPhone,
           email: normalizedEmail ?? null,
           currentStageId: stageId,
-          ...originFields
+          ...originFields,
+          ...(defaultProductName ? { originProductName: defaultProductName } : {})
         }
       });
     }
@@ -982,11 +988,14 @@ export class CrmService {
     originProductName: string | null;
     originOrderStatus: OrderStatus | null;
   }) {
-    if (lead.originAmount == null) return null;
+    // A lead can carry just a default product name (e.g. a single-product
+    // workspace stamping it on every new card) with no value yet — show
+    // that on its own rather than hiding it until a real amount exists.
+    if (lead.originAmount == null && !lead.originProductName) return null;
     return {
       id: 'snapshot',
       productName: lead.originProductName ?? '',
-      amount: lead.originAmount,
+      amount: lead.originAmount ?? 0,
       currency: lead.originCurrency ?? 'BRL',
       status: lead.originOrderStatus ?? OrderStatus.OPEN,
       provider: 'KIWIFY' as CheckoutProvider
@@ -1025,6 +1034,10 @@ export class CrmService {
     }
 
     return membership.workspaceId;
+  }
+
+  private async requireWorkspace(workspaceId: string) {
+    return this.prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   }
 
   private async requireLead(workspaceId: string, leadId: string) {

@@ -270,12 +270,17 @@ export function FunnelBoard({
 
             {card.phone ? <p className="crm-funnel-card-phone">{card.phone}</p> : null}
 
-            {/* Amount — visible whenever the card carries order data (checkout-sourced) */}
+            {/* Amount — visible whenever the card carries order data
+                (checkout-sourced, or just a default product name with no
+                value yet — e.g. a single-product workspace's default). */}
             {card.latestOrder ? (
               <p className="crm-funnel-card-amount">
-                {formatCurrency(card.latestOrder.amount, card.latestOrder.currency)}
+                {card.latestOrder.amount > 0 ? formatCurrency(card.latestOrder.amount, card.latestOrder.currency) : null}
                 {card.latestOrder.productName ? (
-                  <span className="crm-funnel-card-amount-product"> · {card.latestOrder.productName}</span>
+                  <span className="crm-funnel-card-amount-product">
+                    {card.latestOrder.amount > 0 ? ' · ' : ''}
+                    {card.latestOrder.productName}
+                  </span>
                 ) : null}
               </p>
             ) : null}
