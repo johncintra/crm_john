@@ -445,7 +445,7 @@ body.crm-john-rail-open .crm-stagebar {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 1 1 auto;
+  flex: 0 1 340px;
   min-width: 280px;
 }
 
