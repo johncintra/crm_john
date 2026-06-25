@@ -2,7 +2,6 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { SidebarApp } from './SidebarApp';
-import { initAudioSender } from './audioSender';
 
 const ROOT_ID = 'crm-whatsapp-sidebar-root';
 
@@ -39,8 +38,3 @@ if (document.readyState === 'loading') {
   mountSidebar();
 }
 
-// Re-enabled in diagnostic mode only: the button has pointer-events: none
-// (see audioSender.ts) so it can never block clicks on WhatsApp's native
-// mic button again, while we collect console logs to see where it's
-// actually landing and why it wasn't visible.
-initAudioSender();
