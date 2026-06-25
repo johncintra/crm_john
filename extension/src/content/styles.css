@@ -106,13 +106,30 @@ body.crm-john-with-stagebar #app {
 }
 
 .crm-app-shell {
-  pointer-events: auto;
+  /* pointer-events: none on purpose, same pattern as the page root below —
+     this box's own rectangle (320px wide, top-to-near-bottom) had no
+     visible content of its own (every real child below is independently
+     position: fixed and already sets its own pointer-events: auto), but
+     being "auto" here still made the empty rectangle itself clickable —
+     swallowing hovers/clicks on WhatsApp's message edit/delete icons and
+     its native mic button underneath, wherever that rectangle landed. */
+  pointer-events: none;
   position: fixed;
   top: calc(var(--crm-toolbar-height) + 12px);
   right: calc(var(--crm-right-rail-icons-width) + 14px);
   bottom: calc(var(--crm-stagebar-height) + 12px);
   width: calc(var(--crm-right-rail-width) - 28px);
   height: auto;
+}
+
+/* Every direct child renders its own real UI (toolbar, stage bar, modals,
+   the funnel overlay, etc.) and gets pointer-events back regardless of
+   whether it remembered to set this itself — so nothing here can be
+   silently broken by an unrelated future child forgetting to. The
+   :not() excludes the toast, which deliberately stays click-through via
+   the crm-pointer-events-none utility class. */
+.crm-app-shell > *:not(.crm-pointer-events-none) {
+  pointer-events: auto;
 }
 
 .crm-top-toolbar {

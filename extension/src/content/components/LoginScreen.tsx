@@ -32,7 +32,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     'crm-w-full crm-rounded-2xl crm-border crm-border-white/10 crm-bg-black/20 crm-px-4 crm-py-3 crm-text-sm crm-text-white placeholder:crm-text-slate-500 focus:crm-border-accent-500/30 focus:crm-outline-none';
 
   return (
-    <div className="crm-flex crm-h-full crm-min-h-[420px] crm-flex-col crm-items-center crm-justify-center crm-px-6 crm-py-10">
+    <div className="crm-pointer-events-auto crm-flex crm-h-full crm-min-h-[420px] crm-flex-col crm-items-center crm-justify-center crm-px-6 crm-py-10">
       <div className="crm-inline-flex crm-items-center crm-gap-2 crm-rounded-full crm-border crm-border-accent-500/20 crm-bg-accent-500/10 crm-px-3 crm-py-1 crm-text-[10px] crm-font-semibold crm-uppercase crm-tracking-[0.26em] crm-text-accent-300">
         <Sparkles className="crm-h-3.5 crm-w-3.5" />
         CRM John
