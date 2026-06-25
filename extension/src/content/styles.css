@@ -753,6 +753,21 @@ body.crm-john-rail-open .crm-stagebar {
   white-space: nowrap;
 }
 
+.crm-funnel-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  color: oklch(var(--crm-muted-foreground));
+}
+
+.crm-funnel-sort-btn:hover {
+  color: oklch(var(--crm-foreground));
+  background: oklch(var(--crm-muted) / 0.6);
+}
+
 .crm-funnel-list {
   display: flex;
   flex-direction: column;

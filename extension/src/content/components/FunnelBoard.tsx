@@ -1,4 +1,4 @@
-import { Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
+import { ArrowDownUp, Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
 import type { WorkspaceTag } from '../../shared/types';
@@ -159,6 +159,9 @@ export function FunnelBoard({
   compactCheckoutCards = false
 }: FunnelBoardProps) {
   const [search, setSearch] = useState('');
+  // Oportunidades arrives newest-first from the server already — toggling
+  // just reverses that same order client-side, no extra date field needed.
+  const [oportunidadesOldestFirst, setOportunidadesOldestFirst] = useState(false);
   const [draggedConversation, setDraggedConversation] = useState<WhatsAppConversationItem | null>(null);
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [draggedPinnedCard, setDraggedPinnedCard] = useState<FunnelCard | null>(null);
@@ -370,6 +373,9 @@ export function FunnelBoard({
 
   const renderPinnedColumn = (pinnedColumn: PinnedCardColumn & { cards: FunnelCard[] }) => {
     const columnTotal = pinnedColumn.cards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0);
+    const isOportunidades = pinnedColumn.id === 'pinned-oportunidades';
+    const orderedCards =
+      isOportunidades && oportunidadesOldestFirst ? [...pinnedColumn.cards].reverse() : pinnedColumn.cards;
 
     return (
       <div
@@ -386,12 +392,22 @@ export function FunnelBoard({
                 {formatCurrency(columnTotal, pinnedColumn.cards[0]?.latestOrder?.currency ?? 'BRL')}
               </span>
             ) : null}
+            {isOportunidades ? (
+              <button
+                type="button"
+                className="crm-funnel-sort-btn"
+                title={oportunidadesOldestFirst ? 'Mais antigo primeiro' : 'Mais recente primeiro'}
+                onClick={() => setOportunidadesOldestFirst((value) => !value)}
+              >
+                <ArrowDownUp className="crm-h-3.5 crm-w-3.5" />
+              </button>
+            ) : null}
           </div>
           <span className="crm-funnel-count">{pinnedColumn.cards.length}</span>
         </div>
         <div className="crm-funnel-list crm-scrollbar">
-          {pinnedColumn.cards.length ? (
-            pinnedColumn.cards.map((card) =>
+          {orderedCards.length ? (
+            orderedCards.map((card) =>
               renderCard(card, pinnedColumn.color, {
                 draggable: !card.pinnedViaTag,
                 allowRemove: false,
