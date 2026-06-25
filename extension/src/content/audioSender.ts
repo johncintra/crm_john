@@ -75,7 +75,7 @@ function createFooterButton() {
   // isn't guaranteed to wrap the composer in one. The compose box itself
   // (or the mic button) reliably existing is what actually means "a
   // conversation is open and there's somewhere to anchor this button".
-  if (!getMessageComposeBox() && !findMicButton()) {
+  if (!getMessageComposeBox() && !findAttachButton() && !findMicButton()) {
     logPlacement('createFooterButton: nenhuma conversa aberta ainda (sem compose box nem mic), botao nao criado');
     return;
   }
@@ -196,8 +196,27 @@ function applyPosition(button: HTMLButtonElement, left: number, top: number, opa
 }
 
 function placeButtonOverMic(button: HTMLButtonElement) {
+  // The "+" attach button is always rendered at a predictable spot near
+  // the left of the composer, regardless of window width — unlike the mic
+  // button, which can shift or disappear entirely once the chat gets
+  // narrow enough (WhatsApp's own responsive layout). Anchoring on it
+  // first avoids the button drifting off-position or vanishing on
+  // narrower windows.
+  const attachButton = findAttachButton();
   const micButton = findMicButton();
   const footer = getComposerFooter();
+
+  if (attachButton) {
+    const rect = attachButton.getBoundingClientRect();
+    const left = Math.max(8, rect.left + rect.width / 2 - 23);
+    const top = Math.max(8, rect.top - 58);
+    logPlacement(`anexar encontrado, rect=${JSON.stringify(rect)} -> botao left=${left} top=${top}`);
+
+    button.style.right = 'auto';
+    button.style.bottom = 'auto';
+    applyPosition(button, left, top, '1');
+    return;
+  }
 
   if (micButton) {
     const rect = micButton.getBoundingClientRect();
@@ -233,6 +252,29 @@ function placeButtonOverMic(button: HTMLButtonElement) {
   } else {
     logPlacement('mic, footer e compose box NAO encontrados, botao nao reposicionado');
   }
+}
+
+function findAttachButton(): HTMLElement | null {
+  const scope = getComposerFooter() ?? document;
+  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]'));
+  const attachIconNames = ['plus', 'attach-menu-plus', 'clip'];
+  const attachLabels = ['anexar', 'attach'];
+
+  const icon = candidates.find((el) => {
+    const dataIcon = (el.getAttribute('data-icon') ?? '').toLowerCase();
+    return attachIconNames.some((name) => dataIcon.includes(name));
+  });
+
+  const labeled = candidates.find((el) => {
+    const label = [el.getAttribute('aria-label'), el.getAttribute('title'), el.getAttribute('data-testid')]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return attachLabels.some((text) => label.includes(text));
+  });
+
+  const target = icon ?? labeled;
+  return target ? (target.closest('button, div[role="button"]') as HTMLElement | null) ?? (target as HTMLElement) : null;
 }
 
 function findMicButton(): HTMLElement | null {
