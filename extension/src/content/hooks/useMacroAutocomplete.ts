@@ -19,6 +19,8 @@ export function useMacroAutocomplete(macros: Macro[]) {
     const element = getMessageComposeBox();
     const text = element?.textContent ?? '';
     const match = text.match(TRAILING_SLASH_COMMAND);
+    // eslint-disable-next-line no-console
+    console.log('[CRM macro] texto do compose box:', JSON.stringify(text), 'match:', match?.[1] ?? null);
     setQuery(match ? match[1] : null);
     setSelectedIndex(0);
   }, []);
@@ -26,10 +28,17 @@ export function useMacroAutocomplete(macros: Macro[]) {
   useEffect(() => {
     const attach = () => {
       const element = getMessageComposeBox();
-      if (!element || element === composeBoxRef.current) return;
+      if (!element) {
+        return;
+      }
+      if (element === composeBoxRef.current) return;
+      // eslint-disable-next-line no-console
+      console.log('[CRM macro] compose box (re)anexado:', element);
       composeBoxRef.current?.removeEventListener('input', checkComposeBoxText);
+      composeBoxRef.current?.removeEventListener('keyup', checkComposeBoxText);
       composeBoxRef.current = element;
       element.addEventListener('input', checkComposeBoxText);
+      element.addEventListener('keyup', checkComposeBoxText);
     };
 
     attach();
@@ -43,6 +52,7 @@ export function useMacroAutocomplete(macros: Macro[]) {
       observer.disconnect();
       window.clearInterval(interval);
       composeBoxRef.current?.removeEventListener('input', checkComposeBoxText);
+      composeBoxRef.current?.removeEventListener('keyup', checkComposeBoxText);
     };
   }, [checkComposeBoxText]);
 

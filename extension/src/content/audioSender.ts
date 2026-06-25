@@ -54,13 +54,20 @@ function createHiddenFileInput() {
 
 function createFooterButton() {
   const footer = document.querySelector('footer');
-  if (!footer) return;
+  if (!footer) {
+    // eslint-disable-next-line no-console
+    console.log('[CRM audio] footer ainda nao encontrado');
+    return;
+  }
 
   let button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
   if (button) {
     placeButtonOverMic(button);
     return;
   }
+
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio] criando botao flutuante de audio');
 
   button = document.createElement('button');
   button.id = BUTTON_ID;
@@ -81,6 +88,11 @@ function createFooterButton() {
     box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     transition: background 0.15s ease, opacity 0.15s ease;
     z-index: 40;
+    /* DIAGNOSTIC MODE: clicks pass through to whatever is underneath
+       (e.g. WhatsApp's native mic button) so we can see where this
+       lands without risking blocking anything again. Remove this line
+       once the positioning is confirmed correct. */
+    pointer-events: none;
   `;
 
   button.addEventListener('mouseenter', () => { button!.style.background = '#087c6d'; });
@@ -127,6 +139,8 @@ function observeFooter() {
   });
 }
 
+let lastPlacementLog = '';
+
 function placeButtonOverMic(button: HTMLButtonElement) {
   const micButton = findMicButton();
   const footer = document.querySelector('footer');
@@ -136,12 +150,26 @@ function placeButtonOverMic(button: HTMLButtonElement) {
     const left = rect.left + rect.width / 2 - 23;
     const top = rect.top - 58;
 
+    const log = `mic encontrado: ${micButton.outerHTML.slice(0, 120)} | rect=${JSON.stringify(rect)} | botao left=${left} top=${top}`;
+    if (log !== lastPlacementLog) {
+      lastPlacementLog = log;
+      // eslint-disable-next-line no-console
+      console.log('[CRM audio]', log);
+    }
+
     button.style.left = `${Math.max(8, Math.min(window.innerWidth - 54, left))}px`;
     button.style.top = `${Math.max(8, top)}px`;
     button.style.right = 'auto';
     button.style.bottom = 'auto';
     button.style.opacity = '1';
     return;
+  }
+
+  const log = 'mic NAO encontrado, usando fallback do footer';
+  if (log !== lastPlacementLog) {
+    lastPlacementLog = log;
+    // eslint-disable-next-line no-console
+    console.log('[CRM audio]', log);
   }
 
   if (footer) {

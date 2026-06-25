@@ -16,15 +16,30 @@ const SEARCH_BOX_SELECTORS = [
 ];
 
 const COMPOSE_BOX_SELECTORS = [
-  'footer [contenteditable="true"][role="textbox"]',
+  '[aria-label="Digite uma mensagem"]',
+  '[aria-label="Type a message"]',
   '[data-testid="conversation-compose-box-input"]',
+  'footer [contenteditable="true"][role="textbox"]',
   'div[contenteditable="true"][data-tab]'
 ];
 
+let lastComposeBoxLog = '';
+
 export function getMessageComposeBox(): HTMLElement | null {
-  return COMPOSE_BOX_SELECTORS
-    .map((selector) => document.querySelector(selector))
-    .find((node): node is HTMLElement => node instanceof HTMLElement) ?? null;
+  const matches = COMPOSE_BOX_SELECTORS.map((selector) => ({
+    selector,
+    node: document.querySelector(selector)
+  }));
+  const found = matches.find((m): m is { selector: string; node: HTMLElement } => m.node instanceof HTMLElement);
+
+  const summary = matches.map((m) => `${m.selector} => ${m.node ? 'OK' : 'null'}`).join(' | ');
+  if (summary !== lastComposeBoxLog) {
+    lastComposeBoxLog = summary;
+    // eslint-disable-next-line no-console
+    console.log('[CRM macro] busca pelo compose box:', summary);
+  }
+
+  return found?.node ?? null;
 }
 
 // Replaces the trailing "/shortcut" the seller just typed with the macro's
@@ -33,6 +48,8 @@ export function getMessageComposeBox(): HTMLElement | null {
 // execCommand('insertText', ...) overwrites exactly that span instead of
 // just appending after it.
 export function replaceComposerSlashCommand(typedLength: number, replacement: string): boolean {
+  // eslint-disable-next-line no-console
+  console.log('[CRM macro] substituindo', typedLength, 'caracteres por:', JSON.stringify(replacement));
   const element = getMessageComposeBox();
   if (!element) {
     return false;

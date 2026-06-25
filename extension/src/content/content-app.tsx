@@ -39,8 +39,8 @@ if (document.readyState === 'loading') {
   mountSidebar();
 }
 
-// Temporarily disabled — it was blocking clicks on WhatsApp's own native
-// mic/record-audio button. Re-enable once the positioning/hit-testing is
-// fixed (see audioSender.ts).
-// initAudioSender();
-void initAudioSender;
+// Re-enabled in diagnostic mode only: the button has pointer-events: none
+// (see audioSender.ts) so it can never block clicks on WhatsApp's native
+// mic button again, while we collect console logs to see where it's
+// actually landing and why it wasn't visible.
+initAudioSender();
