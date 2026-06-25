@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { SidebarApp } from './SidebarApp';
+import { initAudioSender } from './audioSender';
 
 const ROOT_ID = 'crm-whatsapp-sidebar-root';
 
@@ -37,3 +38,6 @@ if (document.readyState === 'loading') {
 } else {
   mountSidebar();
 }
+
+// Self-contained, unrelated to the React sidebar above — see audioSender.ts.
+initAudioSender();

@@ -20,6 +20,12 @@
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
+      "js": ["audio-sender-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://web.whatsapp.com/*"],
       "js": ["assets/content.js"],
       "css": ["assets/content.css"],
       "run_at": "document_idle"
