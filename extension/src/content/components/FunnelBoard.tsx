@@ -206,6 +206,12 @@ export function FunnelBoard({
     [pinnedCardColumns, normalizedSearch]
   );
 
+  // Header count: every regular stage plus Oportunidades (it's part of
+  // this same funnel's pipeline) — Compra Aprovada and "perdido"-hidden
+  // cards are deliberately left out, same as the user asked.
+  const totalLeadCount =
+    filteredCards.length + filteredPinnedColumns.reduce((sum, column) => sum + column.cards.length, 0);
+
   const filteredPinnedColumnsEnd = useMemo(
     () => pinnedCardColumnsEnd.map((column) => ({ ...column, cards: column.cards.filter(matchesSearch) })),
     [pinnedCardColumnsEnd, normalizedSearch]
@@ -509,7 +515,7 @@ export function FunnelBoard({
                 <p className="crm-funnel-kicker">xCore CRM</p>
                 <h2 className="crm-funnel-title">{funnelName}</h2>
                 <p className="crm-funnel-subtitle">
-                  {cards.length} lead{cards.length !== 1 ? 's' : ''} · {columns.length} etapa{columns.length !== 1 ? 's' : ''}
+                  {totalLeadCount} lead{totalLeadCount !== 1 ? 's' : ''} · {columns.length} etapa{columns.length !== 1 ? 's' : ''}
                 </p>
               </div>
               <button type="button" className="crm-funnel-btn crm-funnel-btn-whatsapp" onClick={onClose}>
