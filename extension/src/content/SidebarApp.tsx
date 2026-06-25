@@ -795,13 +795,16 @@ export function SidebarApp() {
       }
       return { ...f, cards: [...f.cards, { id: tempId, name: conversationItem.name, phone, normalizedPhone: phone ? normalizePhone(phone) : null, avatarUrl: conversationItem.avatarUrl, columnId }] };
     }));
-    void sendMessage<{ id: string; leadId: string }>({ type: 'pipeline:assign-contact', payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: conversationItem.name, phone } })
+    void sendMessage<{ id: string; leadId: string; tags: FunnelCard['tags']; latestOrder: FunnelCard['latestOrder'] }>({
+      type: 'pipeline:assign-contact',
+      payload: { pipelineId: selectedLocalFunnel.id, stageId: columnId, name: conversationItem.name, phone }
+    })
       .then((card) => {
         setFunnels((prev) => prev.map((f) => f.id !== selectedLocalFunnel.id ? f : {
           ...f,
           cards: f.cards.map((c) =>
             c.id === tempId || c.name === conversationItem.name
-              ? { ...c, id: card.id, leadId: card.leadId }
+              ? { ...c, id: card.id, leadId: card.leadId, tags: card.tags, latestOrder: card.latestOrder }
               : c
           )
         }));
