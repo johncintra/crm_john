@@ -83,6 +83,10 @@ model Workspace {
   // being sold there is fixed and known ahead of time, regardless of how
   // it's titled on Kiwify's side.
   defaultProductName String?
+  // Same idea, for the order amount (in cents) — a single-product
+  // workspace's price is fixed, so this overrides/fills in the value the
+  // same way defaultProductName does for the name.
+  defaultAmount Int?
   memberships   Membership[]
   pipelines     Pipeline[]
   leads         Lead[]

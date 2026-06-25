@@ -607,10 +607,11 @@ export class CrmService {
         }));
 
       // Each workspace maps to one product — the real thing being sold
-      // there is fixed, regardless of whatever title the source (Kiwify,
-      // an ad lead, ...) sends, so a configured default always wins over
-      // the payload, for every provider.
+      // there is fixed, regardless of whatever title/amount the source
+      // (Kiwify, an ad lead, ...) sends, so a configured default always
+      // wins over the payload, for every provider.
       const effectiveProductName = workspace.defaultProductName ?? dto.productName;
+      const effectiveAmount = workspace.defaultAmount ?? dto.amount;
 
       const nextOrder = order
         ? await tx.order.update({
@@ -618,7 +619,7 @@ export class CrmService {
             data: {
               leadId: updatedLead.id,
               productName: effectiveProductName,
-              amount: dto.amount,
+              amount: effectiveAmount,
               currency: dto.currency?.trim() || 'BRL',
               status: dto.status
             }
@@ -630,7 +631,7 @@ export class CrmService {
               provider,
               externalId: dto.externalId ?? null,
               productName: effectiveProductName,
-              amount: dto.amount,
+              amount: effectiveAmount,
               currency: dto.currency?.trim() || 'BRL',
               status: dto.status
             }
@@ -940,6 +941,7 @@ export class CrmService {
       // this lead worth" before any value is ever entered — every card
       // created here, regardless of source, should say so by default.
       const defaultProductName = contact.originProductName ?? workspace.defaultProductName ?? undefined;
+      const defaultAmount = contact.originAmount ?? workspace.defaultAmount ?? undefined;
       lead = await this.prisma.lead.create({
         data: {
           workspaceId,
@@ -950,7 +952,8 @@ export class CrmService {
           email: normalizedEmail ?? null,
           currentStageId: stageId,
           ...originFields,
-          ...(defaultProductName ? { originProductName: defaultProductName } : {})
+          ...(defaultProductName ? { originProductName: defaultProductName } : {}),
+          ...(defaultAmount !== undefined ? { originAmount: defaultAmount } : {})
         }
       });
     }
