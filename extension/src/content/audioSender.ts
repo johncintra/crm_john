@@ -71,8 +71,14 @@ function createHiddenFileInput() {
 }
 
 function createFooterButton() {
-  const footer = getComposerFooter();
-  if (!footer) return;
+  // Don't gate this on a <footer> existing at all — WhatsApp Web's DOM
+  // isn't guaranteed to wrap the composer in one. The compose box itself
+  // (or the mic button) reliably existing is what actually means "a
+  // conversation is open and there's somewhere to anchor this button".
+  if (!getMessageComposeBox() && !findMicButton()) {
+    logPlacement('createFooterButton: nenhuma conversa aberta ainda (sem compose box nem mic), botao nao criado');
+    return;
+  }
 
   let button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
   if (button) {
@@ -179,8 +185,20 @@ function placeButtonOverMic(button: HTMLButtonElement) {
     button.style.top = `${Math.max(8, rect.top - 56)}px`;
     button.style.bottom = 'auto';
     button.style.opacity = '0.95';
+    return;
+  }
+
+  const composeBox = getMessageComposeBox();
+  if (composeBox) {
+    const rect = composeBox.getBoundingClientRect();
+    logPlacement(`mic e footer NAO encontrados, usando compose box rect=${JSON.stringify(rect)}`);
+    button.style.left = 'auto';
+    button.style.right = '18px';
+    button.style.top = `${Math.max(8, rect.top - 56)}px`;
+    button.style.bottom = 'auto';
+    button.style.opacity = '0.95';
   } else {
-    logPlacement('mic e footer NAO encontrados, botao nao reposicionado');
+    logPlacement('mic, footer e compose box NAO encontrados, botao nao reposicionado');
   }
 }
 
