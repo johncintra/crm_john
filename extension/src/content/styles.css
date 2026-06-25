@@ -445,7 +445,10 @@ body.crm-john-rail-open .crm-stagebar {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 0 1 340px;
+  /* Wide enough to fit all 10 default checkout tags on one line without
+     the horizontal scroll kicking in — still shrinks gracefully (the
+     scroll comes back as a fallback) on a narrower panel. */
+  flex: 0 1 780px;
   min-width: 0;
 }
 
