@@ -210,7 +210,10 @@ function placeButtonOverMic(button: HTMLButtonElement) {
     const rect = attachButton.getBoundingClientRect();
     const left = Math.max(8, rect.left + rect.width / 2 - 23);
     const top = Math.max(8, rect.top - 58);
-    logPlacement(`anexar encontrado, rect=${JSON.stringify(rect)} -> botao left=${left} top=${top}`);
+    const composeRect = getMessageComposeBox()?.getBoundingClientRect();
+    logPlacement(
+      `anexar encontrado, rect=${JSON.stringify(rect)} composeBoxRect=${JSON.stringify(composeRect)} -> botao left=${left} top=${top}`
+    );
 
     button.style.right = 'auto';
     button.style.bottom = 'auto';
@@ -254,9 +257,31 @@ function placeButtonOverMic(button: HTMLButtonElement) {
   }
 }
 
+// getComposerFooter() can fall back to "first <footer> in the whole
+// document" when no compose box is found yet, and the broad
+// scope.querySelectorAll('button, ...') search can match an unrelated
+// "+" (new chat) or icon sitting in the conversation list pane instead
+// of the actual compose bar — exactly what happened: the attach button
+// was being matched at x~407, inside the chat list, not the open
+// conversation's toolbar. Require any candidate to actually share the
+// compose box's row (similar y) and sit to its right (similar or larger
+// x) before accepting it.
+function isInComposerRow(el: Element): boolean {
+  const composeBox = getMessageComposeBox();
+  if (!composeBox) return true;
+
+  const composeRect = composeBox.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  const sameRow = Math.abs(rect.top - composeRect.top) < 80 || Math.abs(rect.bottom - composeRect.bottom) < 80;
+  const toTheRight = rect.left >= composeRect.left - 60;
+  return sameRow && toTheRight;
+}
+
 function findAttachButton(): HTMLElement | null {
   const scope = getComposerFooter() ?? document;
-  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]'));
+  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter(
+    isInComposerRow
+  );
   const attachIconNames = ['plus', 'attach-menu-plus', 'clip'];
   const attachLabels = ['anexar', 'attach'];
 
@@ -279,7 +304,9 @@ function findAttachButton(): HTMLElement | null {
 
 function findMicButton(): HTMLElement | null {
   const scope = getComposerFooter() ?? document;
-  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]'));
+  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter(
+    isInComposerRow
+  );
   const micIconNames = ['microphone', 'mic', 'ptt'];
   const micLabels = ['mensagem de voz', 'voice message', 'microfone', 'microphone', 'gravar', 'record'];
 
