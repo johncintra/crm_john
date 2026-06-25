@@ -280,12 +280,15 @@ export function SidebarApp() {
   }, [conversation.phone, conversations, safeConversationLabel, selectedConversationListItem]);
 
   const activeConversationCard = useMemo(() => {
+    // Deliberately ignores context?.lead?.id as a matching signal: context
+    // is the *result* of this lookup (refreshLeadContext below fetches it
+    // using this card's leadId), so using it here too would let whichever
+    // lead was last loaded keep "winning" the match even after the seller
+    // switches to a completely different chat inside WhatsApp itself —
+    // every signal below must come straight from the chat that's actually
+    // open right now.
     return (
       boardCards.find((card) => {
-        if (context?.lead?.id && card.leadId === context.lead.id) {
-          return true;
-        }
-
         if (
           currentConversationListItem?.phone &&
           card.phone &&
@@ -309,7 +312,7 @@ export function SidebarApp() {
         return false;
       }) ?? null
     );
-  }, [boardCards, context?.lead?.id, conversation.phone, currentConversationListItem, safeConversationLabel]);
+  }, [boardCards, conversation.phone, currentConversationListItem, safeConversationLabel]);
 
   const loadCheckoutBoard = useCallback(async () => {
     try {
@@ -965,7 +968,11 @@ export function SidebarApp() {
 
   const handleMoveCurrentConversationToColumn = async (columnId: string) => {
     if (isCheckoutFunnelSelected) {
-      const leadId = context?.lead?.id ?? activeConversationCard?.leadId;
+      // activeConversationCard reflects the chat that's actually open right
+      // now; context can still be the previous chat's lead for a moment
+      // (it's fetched *from* activeConversationCard, not the other way
+      // around), so it must only be a fallback, never take priority.
+      const leadId = activeConversationCard?.leadId ?? context?.lead?.id;
       if (!leadId) {
         setToast('Esse contato ainda nao existe no funil Checkout.');
         return;
