@@ -963,7 +963,13 @@ export function SidebarApp() {
       return;
     }
 
-    if (!selectedLocalFunnel || (!conversation.phone && !safeConversationLabel && !currentConversationListItem)) {
+    if (!selectedLocalFunnel) {
+      setToast('Nenhum funil selecionado.');
+      return;
+    }
+
+    if (!conversation.phone && !safeConversationLabel && !currentConversationListItem) {
+      setToast('Nao consegui identificar essa conversa. Abra-a no WhatsApp e tente novamente.');
       return;
     }
 

@@ -758,14 +758,14 @@ body.crm-john-rail-open .crm-stagebar {
   align-items: center;
   justify-content: center;
   margin-left: 4px;
-  margin-right: 6px;
+  margin-right: 12px;
   padding: 3px;
   border-radius: 999px;
-  color: oklch(var(--crm-muted-foreground));
+  color: #eab308;
 }
 
 .crm-funnel-sort-btn:hover {
-  color: oklch(var(--crm-foreground));
+  color: #facc15;
   background: oklch(var(--crm-muted) / 0.6);
 }
 
