@@ -1,4 +1,4 @@
-import { ArrowDownUp, Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
 import type { WorkspaceTag } from '../../shared/types';
@@ -396,10 +396,14 @@ export function FunnelBoard({
               <button
                 type="button"
                 className="crm-funnel-sort-btn"
-                title={oportunidadesOldestFirst ? 'Mais antigo primeiro' : 'Mais recente primeiro'}
+                title={oportunidadesOldestFirst ? 'Mais antigo primeiro (clique para inverter)' : 'Mais recente primeiro (clique para inverter)'}
                 onClick={() => setOportunidadesOldestFirst((value) => !value)}
               >
-                <ArrowDownUp className="crm-h-3.5 crm-w-3.5" />
+                {oportunidadesOldestFirst ? (
+                  <ArrowUp className="crm-h-3.5 crm-w-3.5" />
+                ) : (
+                  <ArrowDown className="crm-h-3.5 crm-w-3.5" />
+                )}
               </button>
             ) : null}
           </div>
