@@ -147,16 +147,22 @@ body.crm-john-with-stagebar #app {
 }
 
 .crm-stagebar {
+  /* width: fit-content (not the old left+right stretch) so this box's
+     clickable hitbox hugs the chips themselves — the old version left
+     dead, still-clickable empty space stretching to the right edge,
+     which sat right on top of WhatsApp's native mic button and ate
+     its clicks even though nothing was visibly drawn there. */
   pointer-events: auto;
   position: fixed;
   left: clamp(420px, 29vw, 500px);
-  right: calc(var(--crm-right-rail-icons-width) + 14px);
+  width: fit-content;
+  max-width: calc(100vw - clamp(420px, 29vw, 500px) - var(--crm-right-rail-icons-width) - 14px);
   bottom: 10px;
   z-index: 3;
 }
 
 body.crm-john-rail-open .crm-stagebar {
-  right: calc(var(--crm-right-rail-width) + 14px);
+  max-width: calc(100vw - clamp(420px, 29vw, 500px) - var(--crm-right-rail-width) - 14px);
 }
 
 .crm-stagebar-inner {
