@@ -25,6 +25,7 @@ import { UpdateLeadPhoneDto } from './dto/update-lead-phone.dto';
 import { UpdateLeadEmailDto } from './dto/update-lead-email.dto';
 import { UpdateLeadValueDto } from './dto/update-lead-value.dto';
 import { AddLeadTagDto } from './dto/add-lead-tag.dto';
+import { MacroUpsertDto } from './dto/macro-upsert.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { PipelineCreateDto } from './dto/pipeline-create.dto';
 import { PipelineRenameDto } from './dto/pipeline-rename.dto';
@@ -165,6 +166,35 @@ export class CrmController {
   @Get('workspace/tags')
   listWorkspaceTags(@CurrentUser() user: AuthUser) {
     return this.crmService.listWorkspaceTags(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('workspace/macros')
+  listMacros(@CurrentUser() user: AuthUser) {
+    return this.crmService.listMacros(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('workspace/macros')
+  createMacro(@CurrentUser() user: AuthUser, @Body() dto: MacroUpsertDto) {
+    return this.crmService.createMacro(user.sub, dto.shortcut, dto.content);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('workspace/macros/:macroId')
+  updateMacro(
+    @CurrentUser() user: AuthUser,
+    @Param('macroId') macroId: string,
+    @Body() dto: MacroUpsertDto
+  ) {
+    return this.crmService.updateMacro(user.sub, macroId, dto.shortcut, dto.content);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('workspace/macros/:macroId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteMacro(@CurrentUser() user: AuthUser, @Param('macroId') macroId: string) {
+    return this.crmService.deleteMacro(user.sub, macroId);
   }
 
   @UseGuards(JwtAuthGuard)

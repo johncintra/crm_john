@@ -93,6 +93,7 @@ model Workspace {
   leadTags      LeadTag[]
   orders        Order[]
   templates     MessageTemplate[]
+  macros        Macro[]
   checkoutEvents CheckoutEvent[]
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -321,4 +322,20 @@ model MessageTemplate {
   updatedAt   DateTime         @updatedAt
 
   @@index([workspaceId, category])
+}
+
+// Slash-command shortcuts typed straight into the WhatsApp compose box
+// (e.g. "/bomdia") — scoped per workspace, same isolation as everything
+// else (AprovaPM's macros never show up for Anne Galante and vice versa).
+model Macro {
+  id          String    @id @default(cuid())
+  workspaceId String
+  shortcut    String
+  content     String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, shortcut])
+  @@index([workspaceId])
 }

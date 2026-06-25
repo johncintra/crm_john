@@ -481,6 +481,73 @@ export class CrmService {
     }));
   }
 
+  async listMacros(userId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const macros = await this.prisma.macro.findMany({
+      where: { workspaceId },
+      orderBy: { shortcut: 'asc' }
+    });
+
+    return macros.map((macro) => ({ id: macro.id, shortcut: macro.shortcut, content: macro.content }));
+  }
+
+  async createMacro(userId: string, shortcut: string, content: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const normalizedShortcut = this.normalizeMacroShortcut(shortcut);
+    if (!normalizedShortcut) {
+      throw new BadRequestException('Atalho da macro invalido.');
+    }
+
+    const existing = await this.prisma.macro.findFirst({
+      where: { workspaceId, shortcut: normalizedShortcut }
+    });
+
+    const macro = existing
+      ? await this.prisma.macro.update({ where: { id: existing.id }, data: { content } })
+      : await this.prisma.macro.create({ data: { workspaceId, shortcut: normalizedShortcut, content } });
+
+    return { id: macro.id, shortcut: macro.shortcut, content: macro.content };
+  }
+
+  async updateMacro(userId: string, macroId: string, shortcut: string, content: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const macro = await this.prisma.macro.findFirst({ where: { id: macroId, workspaceId } });
+    if (!macro) {
+      throw new NotFoundException('Macro not found.');
+    }
+
+    const normalizedShortcut = this.normalizeMacroShortcut(shortcut);
+    if (!normalizedShortcut) {
+      throw new BadRequestException('Atalho da macro invalido.');
+    }
+
+    const updated = await this.prisma.macro.update({
+      where: { id: macroId },
+      data: { shortcut: normalizedShortcut, content }
+    });
+
+    return { id: updated.id, shortcut: updated.shortcut, content: updated.content };
+  }
+
+  async deleteMacro(userId: string, macroId: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    const macro = await this.prisma.macro.findFirst({ where: { id: macroId, workspaceId } });
+    if (!macro) {
+      throw new NotFoundException('Macro not found.');
+    }
+
+    await this.prisma.macro.delete({ where: { id: macroId } });
+    return { ok: true };
+  }
+
+  private normalizeMacroShortcut(shortcut: string): string | null {
+    const trimmed = shortcut.trim().replace(/^\/+/, '').toLowerCase();
+    if (!trimmed || /\s/.test(trimmed)) {
+      return null;
+    }
+    return trimmed;
+  }
+
   async listWorkspaceTags(userId: string) {
     const workspaceId = await this.getWorkspaceId(userId);
     const tags = await this.prisma.leadTag.findMany({
