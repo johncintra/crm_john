@@ -205,10 +205,25 @@ function applyPosition(button: HTMLButtonElement, left: number, top: number, opa
 // over it. This was the actual reason it kept "disappearing": the
 // mic-centered position routinely fell partly or fully behind our own
 // rail icons.
+function isActuallyVisible(el: Element): boolean {
+  return el instanceof HTMLElement && el.offsetParent !== null && getComputedStyle(el).display !== 'none';
+}
+
 function getMaxButtonLeft(): number {
-  const railOpen = document.body.classList.contains('crm-john-rail-open');
-  const reservedRightWidth = railOpen ? 348 : 46;
-  return window.innerWidth - reservedRightWidth - 46 - 8;
+  // Measure the real, currently-rendered left edge of our own rail
+  // panel/icons instead of assuming a fixed width from a class name —
+  // that strip is only actually shown for some workspace views (a class
+  // like crm-john-rail-open can still be present on body while the
+  // element itself is display:none), so a guessed width clamped the
+  // button way too far left even when there was nothing to avoid.
+  const railIcons = document.querySelector('.crm-right-rail-icons');
+  const railPanel = document.querySelector('.crm-right-rail');
+  const visibleEdges = [railIcons, railPanel]
+    .filter((el): el is HTMLElement => el instanceof HTMLElement && isActuallyVisible(el))
+    .map((el) => el.getBoundingClientRect().left);
+
+  const ownUiLeftEdge = visibleEdges.length ? Math.min(...visibleEdges) : window.innerWidth;
+  return Math.min(window.innerWidth - 54, ownUiLeftEdge - 46 - 8);
 }
 
 function placeButtonOverMic(button: HTMLButtonElement) {
