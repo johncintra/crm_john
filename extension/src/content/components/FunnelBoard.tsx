@@ -5,7 +5,12 @@ import type { WorkspaceTag } from '../../shared/types';
 import { TagPicker } from './TagPicker';
 import type { WhatsAppConversationItem } from '../whatsapp';
 
-const LOST_TAG_NAME = 'perdido';
+// Cards tagged with any of these stay invisible everywhere until the
+// seller clicks that exact tag filter — "perdido" has nowhere else to go,
+// while "reembolso"/"chargeback" do live in Compra Aprovada (a refund or
+// chargeback was still a genuine approval at some point) but shouldn't
+// clutter it by default the same way an active approved sale would.
+const HIDDEN_BY_DEFAULT_TAG_NAMES = ['perdido', 'reembolso', 'chargeback'];
 
 export interface FunnelColumn {
   id: string;
@@ -176,12 +181,12 @@ export function FunnelBoard({
   }, [conversations, normalizedSearch]);
 
   const matchesSearch = (card: FunnelCard) => {
-    // "Perdido" cards stay invisible everywhere until the seller clicks
-    // that exact tag filter — same idea as "aprovado" pinning into Compra
-    // Aprovada, but here there's no other column to show them in, so the
-    // tag filter row is the only way back to them.
-    const isLost = (card.tags ?? []).some((tag) => tag.name.trim().toLowerCase() === LOST_TAG_NAME);
-    if (isLost && normalizedSearch !== LOST_TAG_NAME) return false;
+    // Hidden-by-default cards (see HIDDEN_BY_DEFAULT_TAG_NAMES) stay
+    // invisible until the seller clicks that exact tag filter.
+    const hiddenTag = (card.tags ?? [])
+      .map((tag) => tag.name.trim().toLowerCase())
+      .find((name) => HIDDEN_BY_DEFAULT_TAG_NAMES.includes(name));
+    if (hiddenTag && normalizedSearch !== hiddenTag) return false;
 
     if (!normalizedSearch) return true;
     const tagsText = (card.tags ?? []).map((tag) => tag.name).join(' ');

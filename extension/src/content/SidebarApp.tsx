@@ -29,9 +29,14 @@ import { TagPicker } from './components/TagPicker';
 type WorkspaceView = 'general' | 'funnel';
 type RailPanel = 'account' | 'lead' | 'templates' | 'lists' | 'calendar';
 
-const APPROVED_TAG_NAME = 'aprovado';
-const hasApprovedTag = (card: FunnelCard) =>
-  (card.tags ?? []).some((tag) => tag.name.trim().toLowerCase() === APPROVED_TAG_NAME);
+// A sale that's later refunded or charged back was still a genuine
+// approval — it belongs in Compra Aprovada history-wise, just hidden by
+// default there (see HIDDEN_BY_DEFAULT_TAG_NAMES in FunnelBoard.tsx),
+// revealed again only by filtering for that exact tag. Same pin
+// mechanic as "aprovado" alone, just a wider set of tags that trigger it.
+const COMPRA_APROVADA_TAG_NAMES = ['aprovado', 'reembolso', 'chargeback'];
+const hasCompraAprovadaTag = (card: FunnelCard) =>
+  (card.tags ?? []).some((tag) => COMPRA_APROVADA_TAG_NAMES.includes(tag.name.trim().toLowerCase()));
 
 interface SavedFunnel {
   id: string;
@@ -150,10 +155,14 @@ export function SidebarApp() {
     return [{ id: 'pinned-oportunidades', title: 'Oportunidades', color: '#38bdf8', cards: dedupeAgainstLocalFunnel(opportunities) }];
   }, [checkoutCards, dedupeAgainstLocalFunnel]);
 
-  // Manually tagging a regular CRM card "aprovado" promotes it into the
-  // pinned Compra Aprovada column too — the card's real stage never
-  // changes, so removing/swapping the tag puts it right back where it was
-  // (see hasApprovedTag filtering boardCardsRaw below).
+  // Manually tagging a regular CRM card "aprovado"/"reembolso"/"chargeback"
+  // promotes it into the pinned Compra Aprovada column too — the card's
+  // real stage never changes, so removing/swapping the tag puts it right
+  // back where it was (see hasCompraAprovadaTag filtering boardCardsRaw
+  // below). Refund/chargeback cards land here too since they were a
+  // genuine approval at some point, but stay hidden by default within the
+  // column (see HIDDEN_BY_DEFAULT_TAG_NAMES in FunnelBoard.tsx) — only
+  // searching for that exact tag reveals them again.
   const pinnedApprovedColumns = useMemo<PinnedCardColumn[]>(() => {
     // Only leads that were ever visible as an Oportunidade (or already
     // claimed into a regular CRM stage, handled by the dedupe below) count
@@ -161,10 +170,16 @@ export function SidebarApp() {
     // their first-ever webhook never passed through the seller's funnel,
     // so they don't belong in this column.
     const approvedFromCheckout = dedupeAgainstLocalFunnel(
-      checkoutCards.filter((card) => card.latestOrder?.status === 'APPROVED' && card.wasCheckoutOpportunity)
+      checkoutCards.filter(
+        (card) =>
+          card.wasCheckoutOpportunity &&
+          (card.latestOrder?.status === 'APPROVED' ||
+            card.latestOrder?.status === 'REFUNDED' ||
+            card.latestOrder?.status === 'CHARGEBACK')
+      )
     );
     const approvedFromLocalFunnel = !isCheckoutFunnelSelected
-      ? (selectedLocalFunnel?.cards ?? []).filter(hasApprovedTag).map((card) => ({ ...card, pinnedViaTag: true }))
+      ? (selectedLocalFunnel?.cards ?? []).filter(hasCompraAprovadaTag).map((card) => ({ ...card, pinnedViaTag: true }))
       : [];
     return [
       {
@@ -191,12 +206,13 @@ export function SidebarApp() {
   const boardColumns = isCheckoutFunnelSelected
     ? checkoutColumns
     : selectedLocalFunnel?.columns ?? [];
-  // A card tagged "aprovado" is shown in the pinned Compra Aprovada column
-  // instead of its own stage (see pinnedApprovedColumns) — its real stage
-  // is untouched, so it reappears here the moment the tag is removed.
+  // A card tagged "aprovado"/"reembolso"/"chargeback" is shown in the
+  // pinned Compra Aprovada column instead of its own stage (see
+  // pinnedApprovedColumns) — its real stage is untouched, so it reappears
+  // here the moment the tag is removed.
   const boardCardsRaw = isCheckoutFunnelSelected
     ? checkoutCards
-    : (selectedLocalFunnel?.cards ?? []).filter((card) => !hasApprovedTag(card));
+    : (selectedLocalFunnel?.cards ?? []).filter((card) => !hasCompraAprovadaTag(card));
   const boardCards = useMemo(() => {
     if (!conversations.length) return boardCardsRaw;
     return boardCardsRaw.map((card) => {
