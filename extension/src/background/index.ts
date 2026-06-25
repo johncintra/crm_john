@@ -3,8 +3,10 @@ import {
   addLeadTag,
   assignContactToStage,
   createLeadTask,
+  createMacro,
   createPipeline,
   createPipelineStage,
+  deleteMacro,
   deletePipeline,
   deletePipelineStage,
   fetchCheckoutBoard,
@@ -12,6 +14,7 @@ import {
   fetchLeadMessages,
   fetchPipelineBoard,
   fetchPipelines,
+  fetchWorkspaceMacros,
   fetchWorkspaceTags,
   fetchWorkspaceTemplates,
   getProfile,
@@ -27,6 +30,7 @@ import {
   updateLeadPhone,
   updateLeadStage,
   updateLeadValue,
+  updateMacro,
   updatePipelineStage,
   updateTaskStatus
 } from './api';
@@ -79,6 +83,26 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         case 'workspace:fetch-tags': {
           const data = await fetchWorkspaceTags();
           sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'workspace:fetch-macros': {
+          const data = await fetchWorkspaceMacros();
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'macro:create': {
+          const data = await createMacro(message.payload.shortcut, message.payload.content);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'macro:update': {
+          const data = await updateMacro(message.payload.macroId, message.payload.shortcut, message.payload.content);
+          sendResponse({ ok: true, data } satisfies BackgroundResponse);
+          return;
+        }
+        case 'macro:delete': {
+          await deleteMacro(message.payload.macroId);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }
         case 'lead:update-value': {

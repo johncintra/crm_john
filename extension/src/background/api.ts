@@ -18,6 +18,7 @@ import type {
   CheckoutBoardData,
   LeadContext,
   LoginPayload,
+  Macro,
   MessageTemplate,
   TaskStatus,
   WorkspaceTag
@@ -343,6 +344,24 @@ export async function fetchWorkspaceTags(): Promise<WorkspaceTag[]> {
   const session = await getStoredSession();
   if (isPreviewSession(session)) return [];
   return request('/workspace/tags');
+}
+
+export async function fetchWorkspaceMacros(): Promise<Macro[]> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return [];
+  return request('/workspace/macros');
+}
+
+export async function createMacro(shortcut: string, content: string): Promise<Macro> {
+  return request('/workspace/macros', { method: 'POST', body: { shortcut, content } });
+}
+
+export async function updateMacro(macroId: string, shortcut: string, content: string): Promise<Macro> {
+  return request(`/workspace/macros/${macroId}`, { method: 'PATCH', body: { shortcut, content } });
+}
+
+export async function deleteMacro(macroId: string): Promise<void> {
+  await request(`/workspace/macros/${macroId}`, { method: 'DELETE' });
 }
 
 export async function updateLeadValue(leadId: string, amount: number, currency?: string, productName?: string): Promise<void> {

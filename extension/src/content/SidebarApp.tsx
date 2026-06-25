@@ -15,7 +15,7 @@ import {
   openConversationByPhoneNumber,
   openConversationInWhatsApp
 } from './whatsapp';
-import type { AuthSession, CheckoutBoardData, LeadContext, RemoteLeadMessage, WorkspaceTag } from '../shared/types';
+import type { AuthSession, CheckoutBoardData, LeadContext, Macro, RemoteLeadMessage, WorkspaceTag } from '../shared/types';
 import {
   FunnelBoard,
   type FunnelCard,
@@ -25,6 +25,7 @@ import {
 import { LoginScreen } from './components/LoginScreen';
 import { MessageHistoryPanel } from './components/MessageHistoryPanel';
 import { TagPicker } from './components/TagPicker';
+import { MacroManagerModal } from './components/MacroManagerModal';
 
 type WorkspaceView = 'general' | 'funnel';
 type RailPanel = 'account' | 'lead' | 'templates' | 'lists' | 'calendar';
@@ -65,6 +66,8 @@ export function SidebarApp() {
   const isAuthenticated = Boolean(session?.token);
   const [context, setContext] = useState<LeadContext | null>(demoLeadContext);
   const [workspaceTags, setWorkspaceTags] = useState<WorkspaceTag[]>([]);
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [isMacroModalOpen, setIsMacroModalOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('funnel');
   const [railPanel, setRailPanel] = useState<RailPanel>('account');
@@ -382,6 +385,13 @@ export function SidebarApp() {
     if (!isAuthenticated) return;
     void sendMessage<WorkspaceTag[]>({ type: 'workspace:fetch-tags' })
       .then((tags) => setWorkspaceTags(tags))
+      .catch(() => undefined);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void sendMessage<Macro[]>({ type: 'workspace:fetch-macros' })
+      .then((data) => setMacros(data))
       .catch(() => undefined);
   }, [isAuthenticated]);
 
@@ -1052,6 +1062,26 @@ export function SidebarApp() {
     setToast('Funil atualizado.');
   };
 
+  const handleCreateMacro = (shortcut: string, content: string) => {
+    void sendMessage<Macro>({ type: 'macro:create', payload: { shortcut, content } })
+      .then((macro) => setMacros((prev) => [...prev, macro].sort((a, b) => a.shortcut.localeCompare(b.shortcut))))
+      .catch(() => setToast('Erro ao criar macro.'));
+  };
+
+  const handleUpdateMacro = (macroId: string, shortcut: string, content: string) => {
+    void sendMessage<Macro>({ type: 'macro:update', payload: { macroId, shortcut, content } })
+      .then((macro) =>
+        setMacros((prev) => prev.map((m) => (m.id === macroId ? macro : m)).sort((a, b) => a.shortcut.localeCompare(b.shortcut)))
+      )
+      .catch(() => setToast('Erro ao atualizar macro.'));
+  };
+
+  const handleDeleteMacro = (macroId: string) => {
+    setMacros((prev) => prev.filter((m) => m.id !== macroId));
+    void sendMessage({ type: 'macro:delete', payload: { macroId } })
+      .catch(() => setToast('Erro ao excluir macro.'));
+  };
+
   const activePanelTitle =
     railPanel === 'account'
       ? 'Minha Conta'
@@ -1104,6 +1134,7 @@ export function SidebarApp() {
           onSelectFunnel={setSelectedFunnelId}
           onCreateFunnel={handleCreateFunnel}
           onConfigureFunnel={handleConfigureFunnel}
+          onManageMacros={() => setIsMacroModalOpen(true)}
           onCopyEmail={handleCopyEmail}
           onOpenConversation={handleOpenConversation}
           onAssignConversation={handleAssignConversation}
@@ -1399,6 +1430,16 @@ export function SidebarApp() {
           leadName={messageHistoryLeadName}
           messages={messageHistory}
           onClose={() => setMessageHistory(null)}
+        />
+      ) : null}
+
+      {isMacroModalOpen ? (
+        <MacroManagerModal
+          macros={macros}
+          onClose={() => setIsMacroModalOpen(false)}
+          onCreate={handleCreateMacro}
+          onUpdate={handleUpdateMacro}
+          onDelete={handleDeleteMacro}
         />
       ) : null}
     </div>

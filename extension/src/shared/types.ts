@@ -133,6 +133,12 @@ export interface WorkspaceTag {
   color: string | null;
 }
 
+export interface Macro {
+  id: string;
+  shortcut: string;
+  content: string;
+}
+
 export interface PipelineStage {
   id: string;
   name: string;
@@ -230,6 +236,10 @@ export type BackgroundRequest =
   | { type: 'checkout:fetch-board' }
   | { type: 'workspace:fetch-templates' }
   | { type: 'workspace:fetch-tags' }
+  | { type: 'workspace:fetch-macros' }
+  | { type: 'macro:create'; payload: { shortcut: string; content: string } }
+  | { type: 'macro:update'; payload: { macroId: string; shortcut: string; content: string } }
+  | { type: 'macro:delete'; payload: { macroId: string } }
   | { type: 'lead:update-value'; payload: { leadId: string; amount: number; currency?: string; productName?: string } }
   | { type: 'lead:add-note'; payload: { leadId: string; content: string } }
   | { type: 'lead:create-task'; payload: { leadId: string; title: string; description?: string } }

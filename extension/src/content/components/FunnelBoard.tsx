@@ -64,6 +64,7 @@ interface FunnelBoardProps {
   onSelectFunnel: (funnelId: string) => void;
   onCreateFunnel: () => void;
   onConfigureFunnel: () => void;
+  onManageMacros?: () => void;
   onCopyEmail?: (email: string) => void;
   onOpenConversation: (conversation: { name: string; phone: string | null; normalizedPhone?: string | null; leadId?: string }) => void | Promise<void>;
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void | Promise<void>;
@@ -138,6 +139,7 @@ export function FunnelBoard({
   onSelectFunnel,
   onCreateFunnel,
   onConfigureFunnel,
+  onManageMacros,
   onCopyEmail,
   onOpenConversation,
   onAssignConversation,
@@ -517,6 +519,11 @@ export function FunnelBoard({
               <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onConfigureFunnel}>
                 Configurar
               </button>
+              {onManageMacros ? (
+                <button type="button" className="crm-funnel-btn crm-funnel-btn-secondary" onClick={onManageMacros}>
+                  Macro
+                </button>
+              ) : null}
             </div>
 
             <div className="crm-funnel-header-right">
