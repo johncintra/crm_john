@@ -12,9 +12,23 @@
 // had; that unrelated bug was what actually blocked the native mic
 // button before, not this.)
 
+import { getMessageComposeBox } from './whatsapp';
+
 const BUTTON_ID = 'whatsapp-audio-sender-button';
 const INPUT_ID = 'whatsapp-audio-sender-input';
 const TOAST_ID = 'whatsapp-audio-sender-toast';
+
+// document.querySelector('footer') grabs whichever <footer> happens to be
+// first in the document — WhatsApp Web can have more than one (e.g. the
+// chat list's own footer), which silently put every position calculation
+// below relative to the wrong box. Anchoring on the actual compose box
+// (already validated by the macro-autocomplete feature) and walking up to
+// its nearest <footer> is reliable regardless of how many other <footer>
+// elements exist elsewhere on the page.
+function getComposerFooter(): HTMLElement | null {
+  const composeBox = getMessageComposeBox();
+  return composeBox?.closest('footer') ?? document.querySelector('footer');
+}
 
 let footerObserver: MutationObserver | undefined;
 let repositionTimer: number | undefined;
@@ -57,7 +71,7 @@ function createHiddenFileInput() {
 }
 
 function createFooterButton() {
-  const footer = document.querySelector('footer');
+  const footer = getComposerFooter();
   if (!footer) return;
 
   let button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
@@ -131,14 +145,23 @@ function observeFooter() {
   });
 }
 
+let lastPlacementLog = '';
+function logPlacement(message: string) {
+  if (message === lastPlacementLog) return;
+  lastPlacementLog = message;
+  // eslint-disable-next-line no-console
+  console.log('[CRM audio]', message);
+}
+
 function placeButtonOverMic(button: HTMLButtonElement) {
   const micButton = findMicButton();
-  const footer = document.querySelector('footer');
+  const footer = getComposerFooter();
 
   if (micButton) {
     const rect = micButton.getBoundingClientRect();
     const left = rect.left + rect.width / 2 - 23;
     const top = rect.top - 58;
+    logPlacement(`mic encontrado, rect=${JSON.stringify(rect)} -> botao left=${left} top=${top}`);
 
     button.style.left = `${Math.max(8, Math.min(window.innerWidth - 54, left))}px`;
     button.style.top = `${Math.max(8, top)}px`;
@@ -150,16 +173,19 @@ function placeButtonOverMic(button: HTMLButtonElement) {
 
   if (footer) {
     const rect = footer.getBoundingClientRect();
+    logPlacement(`mic NAO encontrado, usando footer rect=${JSON.stringify(rect)}`);
     button.style.left = 'auto';
     button.style.right = '18px';
     button.style.top = `${Math.max(8, rect.top - 56)}px`;
     button.style.bottom = 'auto';
     button.style.opacity = '0.95';
+  } else {
+    logPlacement('mic e footer NAO encontrados, botao nao reposicionado');
   }
 }
 
 function findMicButton(): HTMLElement | null {
-  const scope = document.querySelector('footer') ?? document;
+  const scope = getComposerFooter() ?? document;
   const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]'));
   const micIconNames = ['microphone', 'mic', 'ptt'];
   const micLabels = ['mensagem de voz', 'voice message', 'microfone', 'microphone', 'gravar', 'record'];
