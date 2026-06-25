@@ -407,17 +407,10 @@ body.crm-john-rail-open .crm-stagebar {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  flex-wrap: wrap;
   margin-bottom: 0;
   padding: 8px 12px;
   background: oklch(var(--crm-card));
   border-bottom: 1px solid oklch(var(--crm-border) / 0.6);
-}
-
-.crm-funnel-title-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .crm-funnel-kicker {
@@ -446,20 +439,6 @@ body.crm-john-rail-open .crm-stagebar {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.crm-funnel-tag-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  flex-basis: 100%;
-  width: 100%;
-}
-
-.crm-funnel-tag-filter {
-  cursor: pointer;
-  background: transparent;
 }
 
 .crm-funnel-select {
@@ -526,15 +505,6 @@ body.crm-john-rail-open .crm-stagebar {
   background: oklch(var(--crm-muted) / 0.4);
   border: 1px solid oklch(var(--crm-border) / 0.7);
   color: oklch(var(--crm-foreground));
-}
-
-.crm-funnel-btn-whatsapp {
-  background: #25d366;
-  color: #06251a;
-}
-
-.crm-funnel-btn-whatsapp:hover {
-  background: #1ebd5a;
 }
 
 .crm-funnel-columns {
