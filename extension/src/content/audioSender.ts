@@ -234,7 +234,20 @@ function applyPosition(button: HTMLButtonElement, left: number, top: number, opa
 // mic-centered position routinely fell partly or fully behind our own
 // rail icons.
 function isActuallyVisible(el: Element): boolean {
-  return el instanceof HTMLElement && el.offsetParent !== null && getComputedStyle(el).display !== 'none';
+  // offsetParent is null for any position: fixed element by spec — not
+  // just hidden ones — and every element this function gets called on
+  // (.crm-funnel-overlay, .crm-modal-backdrop, .crm-right-rail*) IS
+  // position: fixed. That made this always report "not visible" even
+  // while genuinely open/on-screen, which is how isOwnModalOpen() ended
+  // up never actually skipping the expensive mic/attach search below —
+  // right when the funnel board has the most cards on screen. Checking
+  // computed style + real dimensions instead works regardless of
+  // position.
+  if (!(el instanceof HTMLElement)) return false;
+  const style = getComputedStyle(el);
+  if (style.display === 'none' || style.visibility === 'hidden') return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
 }
 
 // The audio button's z-index is now near the maximum possible value (see
@@ -342,21 +355,36 @@ function placeButtonOverMic(button: HTMLButtonElement) {
 // conversation's toolbar. Require any candidate to actually share the
 // compose box's row (similar y) and sit to its right (similar or larger
 // x) before accepting it.
-function isInComposerRow(el: Element): boolean {
-  const composeBox = getMessageComposeBox();
-  if (!composeBox) return true;
+// composeRect is computed once by the caller and passed in — this used to
+// call getMessageComposeBox() (5 document.querySelector calls) again for
+// every single candidate element, which on a funnel board with hundreds
+// of cards (each with several button-like elements of its own) added up
+// to thousands of querySelector calls per single findAttachButton/
+// findMicButton call. Confirmed via a Performance profile: querySelector
+// alone was 96.8% of total recorded time during normal scrolling.
+function isInComposerRow(el: Element, composeRect: DOMRect | null): boolean {
+  if (!composeRect) return true;
 
-  const composeRect = composeBox.getBoundingClientRect();
   const rect = el.getBoundingClientRect();
   const sameRow = Math.abs(rect.top - composeRect.top) < 80 || Math.abs(rect.bottom - composeRect.bottom) < 80;
   const toTheRight = rect.left >= composeRect.left - 60;
   return sameRow && toTheRight;
 }
 
+// Scoping the fallback search to #main (WhatsApp's own conversation panel)
+// instead of the whole document also matters here — our own funnel board
+// (hundreds of cards, each with several buttons of its own) sits in a
+// completely separate container, so searching all of `document` was
+// checking every one of those too, for nothing.
+function getSearchScope(): ParentNode {
+  return getComposerFooter() ?? document.querySelector('#main') ?? document;
+}
+
 function findAttachButton(): HTMLElement | null {
-  const scope = getComposerFooter() ?? document;
-  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter(
-    isInComposerRow
+  const scope = getSearchScope();
+  const composeRect = getMessageComposeBox()?.getBoundingClientRect() ?? null;
+  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter((el) =>
+    isInComposerRow(el, composeRect)
   );
   const attachIconNames = ['plus', 'attach-menu-plus', 'clip'];
   const attachLabels = ['anexar', 'attach'];
@@ -379,9 +407,10 @@ function findAttachButton(): HTMLElement | null {
 }
 
 function findMicButton(): HTMLElement | null {
-  const scope = getComposerFooter() ?? document;
-  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter(
-    isInComposerRow
+  const scope = getSearchScope();
+  const composeRect = getMessageComposeBox()?.getBoundingClientRect() ?? null;
+  const candidates = Array.from(scope.querySelectorAll('button, div[role="button"], span[data-icon]')).filter((el) =>
+    isInComposerRow(el, composeRect)
   );
   const micIconNames = ['microphone', 'mic', 'ptt'];
   const micLabels = ['mensagem de voz', 'voice message', 'microfone', 'microphone', 'gravar', 'record'];
