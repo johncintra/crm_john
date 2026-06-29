@@ -42,8 +42,17 @@ export function useMacroAutocomplete(macros: Macro[]) {
     };
 
     attach();
+    // Debounced so a burst of unrelated DOM mutations elsewhere on the
+    // page — e.g. the funnel board's own few hundred cards during normal
+    // use — doesn't re-run attach() (and its document.querySelector calls)
+    // on every single one of them.
+    let debounceTimer: number | null = null;
     const observer = new MutationObserver(() => {
-      attach();
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        attach();
+      }, 150);
     });
     observer.observe(document.body, { childList: true, subtree: true });
     const interval = window.setInterval(attach, 1000);
@@ -51,6 +60,7 @@ export function useMacroAutocomplete(macros: Macro[]) {
     return () => {
       observer.disconnect();
       window.clearInterval(interval);
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
       composeBoxRef.current?.removeEventListener('input', checkComposeBoxText);
       composeBoxRef.current?.removeEventListener('keyup', checkComposeBoxText);
     };

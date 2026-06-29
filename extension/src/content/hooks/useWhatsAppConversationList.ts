@@ -96,9 +96,24 @@ export function useWhatsAppConversationList(
       });
     };
 
-    const observer = new MutationObserver(() => {
-      window.requestAnimationFrame(emitItems);
-    });
+    // emitItems re-scrapes the whole conversation list and does two
+    // JSON.stringify passes over it — not cheap, and this observer
+    // watches all of document.body (childList+subtree+attributes), so it
+    // fires on every DOM mutation anywhere on the page, including ones
+    // from the funnel board's own few hundred cards re-rendering during
+    // normal use (scrolling, hovering, etc.) — completely unrelated to
+    // the conversation list. requestAnimationFrame alone doesn't cap how
+    // often that can happen; a real debounce does.
+    let debounceTimer: number | null = null;
+    const scheduleEmit = () => {
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        emitItems();
+      }, 150);
+    };
+
+    const observer = new MutationObserver(scheduleEmit);
 
     observer.observe(document.body, {
       childList: true,
@@ -112,6 +127,7 @@ export function useWhatsAppConversationList(
     return () => {
       observer.disconnect();
       window.clearInterval(interval);
+      if (debounceTimer !== null) window.clearTimeout(debounceTimer);
     };
   }, []);
 

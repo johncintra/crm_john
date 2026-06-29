@@ -151,6 +151,14 @@ function observeFooter() {
   if (footerObserver) footerObserver.disconnect();
 
   footerObserver = new MutationObserver(() => {
+    // Skip all the work below (including scheduling the timeout) while
+    // our own funnel board/modals are open — that's exactly when the DOM
+    // has the most going on (hundreds of cards) and mutations fire most
+    // often, and the button stays hidden the whole time anyway (see
+    // isOwnModalOpen() in placeButtonOverMic), so there's nothing useful
+    // for this observer to do until one of those closes again.
+    if (isOwnModalOpen()) return;
+
     if (repositionTimer) window.clearTimeout(repositionTimer);
     repositionTimer = window.setTimeout(() => {
       const button = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
