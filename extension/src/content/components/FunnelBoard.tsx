@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
 import type { WorkspaceTag } from '../../shared/types';
 import { TagPicker } from './TagPicker';
@@ -127,6 +127,201 @@ function FunnelAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | n
   return <div className="crm-funnel-avatar">{name.slice(0, 2).toUpperCase()}</div>;
 }
 
+interface FunnelCardItemProps {
+  card: FunnelCard;
+  columnColor: string;
+  draggable: boolean;
+  allowRemove: boolean;
+  onCardDragStart: (card: FunnelCard) => void;
+  onCardDragEnd: () => void;
+  onCopyEmail?: (email: string) => void;
+  onUpdateCardEmail?: (leadId: string, email: string) => void;
+  onAddCardTag?: (leadId: string, name: string) => void;
+  onRemoveCardTag?: (leadId: string, tagId: string) => void;
+  availableTags: WorkspaceTag[];
+  onOpenConversation: FunnelBoardProps['onOpenConversation'];
+  onRemoveCard: (cardId: string) => void;
+}
+
+// Memoized so the hundreds of cards a busy workspace can have don't all
+// re-render on every state change in the parent FunnelBoard — e.g. just
+// scrolling the columns horizontally used to re-render every single card
+// on every scroll event, which is what made scrolling feel sluggish/janky
+// once the lead count grew past a couple hundred. onCardDragStart/
+// onCardDragEnd are stable callbacks from the parent (see useCallback
+// there) that take the card as an argument instead of closing over it, so
+// this component's own props stay referentially stable across renders.
+const FunnelCardItem = memo(function FunnelCardItem({
+  card,
+  columnColor,
+  draggable,
+  allowRemove,
+  onCardDragStart,
+  onCardDragEnd,
+  onCopyEmail,
+  onUpdateCardEmail,
+  onAddCardTag,
+  onRemoveCardTag,
+  availableTags,
+  onOpenConversation,
+  onRemoveCard
+}: FunnelCardItemProps) {
+  const statusColor = getOrderStatusColor(card.latestOrder?.status);
+
+  return (
+    <article
+      className="crm-funnel-card"
+      draggable={draggable}
+      onDragStart={() => onCardDragStart(card)}
+      onDragEnd={onCardDragEnd}
+    >
+      {/* Colored status bar at top */}
+      <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
+      {/* Stage-colored side bar (wacrm-style) */}
+      <div className="crm-funnel-card-side-bar" style={{ background: columnColor }} />
+
+      <div className="crm-funnel-card-top">
+        <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
+        <div className="crm-min-w-0 crm-funnel-card-main">
+          <div className="crm-funnel-card-name-row">
+            <h3 className="crm-funnel-card-name">{card.name}</h3>
+          </div>
+
+          {/* Email row — always rendered, "N/D" when missing, so every
+              card (checkout-sourced or added straight from a chat) uses
+              the same layout. Editable when missing, so the seller can
+              fill it in later. */}
+          <div className="crm-funnel-card-email-row">
+            <p className={card.email ? 'crm-funnel-card-email' : 'crm-funnel-card-email crm-funnel-card-email-empty'}>
+              {card.email ?? 'E-mail: N/D'}
+            </p>
+            {card.email && onCopyEmail ? (
+              <button
+                type="button"
+                className="crm-funnel-card-email-copy"
+                title="Copiar email"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onCopyEmail(card.email!);
+                }}
+              >
+                <Copy className="crm-h-3 crm-w-3" />
+              </button>
+            ) : null}
+            {!card.email && card.leadId && onUpdateCardEmail ? (
+              <button
+                type="button"
+                className="crm-funnel-card-email-copy"
+                title="Adicionar email"
+                onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const value = window.prompt(`E-mail de ${card.name}:`)?.trim();
+                  if (value) onUpdateCardEmail(card.leadId!, value);
+                }}
+              >
+                <Plus className="crm-h-3 crm-w-3" />
+              </button>
+            ) : null}
+          </div>
+
+          {card.phone ? <p className="crm-funnel-card-phone">{card.phone}</p> : null}
+
+          {/* Amount — visible whenever the card carries order data
+              (checkout-sourced, or just a default product name with no
+              value yet — e.g. a single-product workspace's default). */}
+          {card.latestOrder ? (
+            <p className="crm-funnel-card-amount">
+              {card.latestOrder.amount > 0 ? formatCurrency(card.latestOrder.amount, card.latestOrder.currency) : null}
+              {card.latestOrder.productName ? (
+                <span className="crm-funnel-card-amount-product">
+                  {card.latestOrder.amount > 0 ? ' · ' : ''}
+                  {card.latestOrder.productName}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+
+          {!card.latestOrder && card.source ? (
+            <p className="crm-funnel-card-meta">{card.source}</p>
+          ) : null}
+
+          <div className="crm-funnel-card-tags">
+            {card.tags?.map((tag) => (
+              <span
+                key={tag.id}
+                className="crm-funnel-card-tag"
+                style={{
+                  borderColor: `${tag.color ?? '#334155'}55`,
+                  color: tag.color ?? '#cbd5e1'
+                }}
+              >
+                {tag.name}
+                {card.leadId && onRemoveCardTag ? (
+                  <button
+                    type="button"
+                    className="crm-funnel-card-tag-remove"
+                    title="Remover tag"
+                    onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onRemoveCardTag(card.leadId!, tag.id);
+                    }}
+                  >
+                    <X className="crm-h-2.5 crm-w-2.5" />
+                  </button>
+                ) : null}
+              </span>
+            ))}
+            {card.leadId && onAddCardTag ? (
+              <TagPicker
+                availableTags={availableTags}
+                currentTagIds={(card.tags ?? []).map((tag) => tag.id)}
+                onPick={(tag) => onAddCardTag(card.leadId!, tag.name)}
+              />
+            ) : null}
+          </div>
+        </div>
+
+        {allowRemove ? (
+          <button
+            type="button"
+            className="crm-funnel-card-remove"
+            title="Excluir lead"
+            onClick={() => {
+              const confirmed = window.confirm(`Excluir "${card.name}" definitivamente? Essa acao nao pode ser desfeita.`);
+              if (confirmed) onRemoveCard(card.id);
+            }}
+          >
+            <X className="crm-h-3.5 crm-w-3.5" />
+          </button>
+        ) : null}
+      </div>
+
+      {/* Action buttons */}
+      <div className="crm-funnel-card-actions">
+        <button
+          type="button"
+          className="crm-funnel-card-btn-msg"
+          draggable={false}
+          onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenConversation(card);
+          }}
+        >
+          <MessageCircle className="crm-h-3.5 crm-w-3.5" />
+          Mensagem
+        </button>
+      </div>
+    </article>
+  );
+});
+
 export function FunnelBoard({
   funnelName,
   funnels,
@@ -217,167 +412,19 @@ export function FunnelBoard({
     [pinnedCardColumnsEnd, normalizedSearch]
   );
 
-  const renderCard = (
-    card: FunnelCard,
-    columnColor: string,
-    options: { draggable: boolean; allowRemove: boolean; onDragStart: () => void }
-  ) => {
-    const statusColor = getOrderStatusColor(card.latestOrder?.status);
-
-    return (
-      <article
-        key={card.id}
-        className="crm-funnel-card"
-        draggable={options.draggable}
-        onDragStart={options.onDragStart}
-        onDragEnd={() => { setDraggedCardId(null); setDraggedPinnedCard(null); }}
-      >
-        {/* Colored status bar at top */}
-        <div className="crm-funnel-card-bar" style={{ background: statusColor }} />
-        {/* Stage-colored side bar (wacrm-style) */}
-        <div className="crm-funnel-card-side-bar" style={{ background: columnColor }} />
-
-        <div className="crm-funnel-card-top">
-          <FunnelAvatar name={card.name} avatarUrl={card.avatarUrl} />
-          <div className="crm-min-w-0 crm-funnel-card-main">
-            <div className="crm-funnel-card-name-row">
-              <h3 className="crm-funnel-card-name">{card.name}</h3>
-            </div>
-
-            {/* Email row — always rendered, "N/D" when missing, so every
-                card (checkout-sourced or added straight from a chat) uses
-                the same layout. Editable when missing, so the seller can
-                fill it in later. */}
-            <div className="crm-funnel-card-email-row">
-              <p className={card.email ? 'crm-funnel-card-email' : 'crm-funnel-card-email crm-funnel-card-email-empty'}>
-                {card.email ?? 'E-mail: N/D'}
-              </p>
-              {card.email && onCopyEmail ? (
-                <button
-                  type="button"
-                  className="crm-funnel-card-email-copy"
-                  title="Copiar email"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onCopyEmail(card.email!);
-                  }}
-                >
-                  <Copy className="crm-h-3 crm-w-3" />
-                </button>
-              ) : null}
-              {!card.email && card.leadId && onUpdateCardEmail ? (
-                <button
-                  type="button"
-                  className="crm-funnel-card-email-copy"
-                  title="Adicionar email"
-                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const value = window.prompt(`E-mail de ${card.name}:`)?.trim();
-                    if (value) onUpdateCardEmail(card.leadId!, value);
-                  }}
-                >
-                  <Plus className="crm-h-3 crm-w-3" />
-                </button>
-              ) : null}
-            </div>
-
-            {card.phone ? <p className="crm-funnel-card-phone">{card.phone}</p> : null}
-
-            {/* Amount — visible whenever the card carries order data
-                (checkout-sourced, or just a default product name with no
-                value yet — e.g. a single-product workspace's default). */}
-            {card.latestOrder ? (
-              <p className="crm-funnel-card-amount">
-                {card.latestOrder.amount > 0 ? formatCurrency(card.latestOrder.amount, card.latestOrder.currency) : null}
-                {card.latestOrder.productName ? (
-                  <span className="crm-funnel-card-amount-product">
-                    {card.latestOrder.amount > 0 ? ' · ' : ''}
-                    {card.latestOrder.productName}
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-
-            {!card.latestOrder && card.source ? (
-              <p className="crm-funnel-card-meta">{card.source}</p>
-            ) : null}
-
-            <div className="crm-funnel-card-tags">
-              {card.tags?.map((tag) => (
-                <span
-                  key={tag.id}
-                  className="crm-funnel-card-tag"
-                  style={{
-                    borderColor: `${tag.color ?? '#334155'}55`,
-                    color: tag.color ?? '#cbd5e1'
-                  }}
-                >
-                  {tag.name}
-                  {card.leadId && onRemoveCardTag ? (
-                    <button
-                      type="button"
-                      className="crm-funnel-card-tag-remove"
-                      title="Remover tag"
-                      onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onRemoveCardTag(card.leadId!, tag.id);
-                      }}
-                    >
-                      <X className="crm-h-2.5 crm-w-2.5" />
-                    </button>
-                  ) : null}
-                </span>
-              ))}
-              {card.leadId && onAddCardTag ? (
-                <TagPicker
-                  availableTags={availableTags}
-                  currentTagIds={(card.tags ?? []).map((tag) => tag.id)}
-                  onPick={(tag) => onAddCardTag(card.leadId!, tag.name)}
-                />
-              ) : null}
-            </div>
-          </div>
-
-          {options.allowRemove ? (
-            <button
-              type="button"
-              className="crm-funnel-card-remove"
-              title="Excluir lead"
-              onClick={() => {
-                const confirmed = window.confirm(`Excluir "${card.name}" definitivamente? Essa acao nao pode ser desfeita.`);
-                if (confirmed) onRemoveCard(card.id);
-              }}
-            >
-              <X className="crm-h-3.5 crm-w-3.5" />
-            </button>
-          ) : null}
-        </div>
-
-        {/* Action buttons */}
-        <div className="crm-funnel-card-actions">
-          <button
-            type="button"
-            className="crm-funnel-card-btn-msg"
-            draggable={false}
-            onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenConversation(card);
-            }}
-          >
-            <MessageCircle className="crm-h-3.5 crm-w-3.5" />
-            Mensagem
-          </button>
-        </div>
-      </article>
-    );
-  };
+  // Stable across renders (no deps) so FunnelCardItem's memo isn't busted
+  // by a freshly-created function on every FunnelBoard render — see the
+  // comment on FunnelCardItem above for why that mattered for scroll perf.
+  const handleCardDragEnd = useCallback(() => {
+    setDraggedCardId(null);
+    setDraggedPinnedCard(null);
+  }, []);
+  const handleRegularCardDragStart = useCallback((card: FunnelCard) => {
+    if (!compactCheckoutCards) setDraggedCardId(card.id);
+  }, [compactCheckoutCards]);
+  const handlePinnedCardDragStart = useCallback((card: FunnelCard) => {
+    if (!card.pinnedViaTag) setDraggedPinnedCard(card);
+  }, []);
 
   const renderPinnedColumn = (pinnedColumn: PinnedCardColumn & { cards: FunnelCard[] }) => {
     const columnTotal = pinnedColumn.cards.reduce((sum, card) => sum + (card.latestOrder?.amount ?? 0), 0);
@@ -419,13 +466,24 @@ export function FunnelBoard({
         </div>
         <div className="crm-funnel-list crm-scrollbar">
           {orderedCards.length ? (
-            orderedCards.map((card) =>
-              renderCard(card, pinnedColumn.color, {
-                draggable: !card.pinnedViaTag,
-                allowRemove: false,
-                onDragStart: card.pinnedViaTag ? () => undefined : () => setDraggedPinnedCard(card)
-              })
-            )
+            orderedCards.map((card) => (
+              <FunnelCardItem
+                key={card.id}
+                card={card}
+                columnColor={pinnedColumn.color}
+                draggable={!card.pinnedViaTag}
+                allowRemove={false}
+                onCardDragStart={handlePinnedCardDragStart}
+                onCardDragEnd={handleCardDragEnd}
+                onCopyEmail={onCopyEmail}
+                onUpdateCardEmail={onUpdateCardEmail}
+                onAddCardTag={onAddCardTag}
+                onRemoveCardTag={onRemoveCardTag}
+                availableTags={availableTags}
+                onOpenConversation={onOpenConversation}
+                onRemoveCard={onRemoveCard}
+              />
+            ))
           ) : (
             <div className="crm-funnel-empty">
               <p>Nenhum lead aqui</p>
@@ -484,7 +542,19 @@ export function FunnelBoard({
     const element = columnsRef.current;
     if (!element) return;
 
-    const handleScroll = () => setScrollLeft(element.scrollLeft);
+    // Native "scroll" fires far more often than once per frame — updating
+    // React state on every single event re-rendered the whole board (every
+    // column, every card) that often, which is what made scrolling feel
+    // janky with a few hundred cards on screen. Coalescing to at most one
+    // state update per animation frame keeps it to the browser's own pace.
+    let scrollFrame: number | null = null;
+    const handleScroll = () => {
+      if (scrollFrame !== null) return;
+      scrollFrame = window.requestAnimationFrame(() => {
+        scrollFrame = null;
+        setScrollLeft(element.scrollLeft);
+      });
+    };
     element.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', updateScrollMetrics);
     const resizeObserver = new ResizeObserver(() => updateScrollMetrics());
@@ -495,6 +565,7 @@ export function FunnelBoard({
       element.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', updateScrollMetrics);
       resizeObserver.disconnect();
+      if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame);
     };
   }, [columns.length, cards.length, conversations.length]);
 
@@ -714,13 +785,24 @@ export function FunnelBoard({
 
                   <div className="crm-funnel-list crm-scrollbar">
                     {columnCards.length ? (
-                      columnCards.map((card) =>
-                        renderCard(card, column.color, {
-                          draggable: !compactCheckoutCards,
-                          allowRemove: allowColumnManagement,
-                          onDragStart: () => { if (!compactCheckoutCards) setDraggedCardId(card.id); }
-                        })
-                      )
+                      columnCards.map((card) => (
+                        <FunnelCardItem
+                          key={card.id}
+                          card={card}
+                          columnColor={column.color}
+                          draggable={!compactCheckoutCards}
+                          allowRemove={allowColumnManagement}
+                          onCardDragStart={handleRegularCardDragStart}
+                          onCardDragEnd={handleCardDragEnd}
+                          onCopyEmail={onCopyEmail}
+                          onUpdateCardEmail={onUpdateCardEmail}
+                          onAddCardTag={onAddCardTag}
+                          onRemoveCardTag={onRemoveCardTag}
+                          availableTags={availableTags}
+                          onOpenConversation={onOpenConversation}
+                          onRemoveCard={onRemoveCard}
+                        />
+                      ))
                     ) : (
                       <div className="crm-funnel-empty">
                         <p>Arraste contatos aqui</p>
