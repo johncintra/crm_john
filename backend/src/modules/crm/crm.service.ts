@@ -718,6 +718,32 @@ export class CrmService {
 
       await this.syncCheckoutTags(tx, updatedLead.id, tagRegistry, provider, dto.status, dto.paymentMethod);
 
+      // assignContactToStage deliberately creates a separate Lead row, scoped
+      // to the seller's own pipeline, the moment a checkout lead gets claimed
+      // into a regular CRM funnel — so a later webhook on *this* lead (e.g.
+      // a pending payment that finally gets approved) never touched the
+      // seller's actual card. It stayed stuck wherever it was, missing the
+      // "aprovado" tag and the updated amount, and so never moved into
+      // Compra Aprovada even though the sale really did go through. Mirror
+      // the status/tag/amount onto every other Lead in this workspace that
+      // matches the same phone or email, regardless of which pipeline it's
+      // in — their real stage is left untouched, exactly like a manually
+      // applied tag would.
+      await this.syncCheckoutStatusToClaimedLeads(
+        tx,
+        workspace.id,
+        checkoutPipeline.id,
+        normalizedPhone,
+        normalizedEmail,
+        tagRegistry,
+        provider,
+        dto.status,
+        dto.paymentMethod,
+        effectiveProductName,
+        effectiveAmount,
+        dto.currency?.trim() || 'BRL'
+      );
+
       await tx.leadTimelineEvent.create({
         data: {
           leadId: updatedLead.id,
@@ -1262,6 +1288,42 @@ export class CrmService {
     }
 
     return this.applyDesiredCheckoutTags(tx, leadId, tagRegistry, desiredTagNames);
+  }
+
+  private async syncCheckoutStatusToClaimedLeads(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    checkoutPipelineId: string,
+    normalizedPhone: string,
+    normalizedEmail: string | null,
+    tagRegistry: Map<string, LeadTag>,
+    provider: CheckoutProvider,
+    status: OrderStatus,
+    paymentMethod: string | null | undefined,
+    productName: string,
+    amount: number,
+    currency: string
+  ) {
+    const claimedLeads = await tx.lead.findMany({
+      where: {
+        workspaceId,
+        pipelineId: { not: checkoutPipelineId },
+        OR: [{ normalizedPhone }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])]
+      }
+    });
+
+    for (const claimedLead of claimedLeads) {
+      await tx.lead.update({
+        where: { id: claimedLead.id },
+        data: {
+          originAmount: amount,
+          originCurrency: currency,
+          originProductName: productName,
+          originOrderStatus: status
+        }
+      });
+      await this.syncCheckoutTags(tx, claimedLead.id, tagRegistry, provider, status, paymentMethod);
+    }
   }
 
   private async applyDesiredCheckoutTags(
