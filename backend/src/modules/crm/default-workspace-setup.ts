@@ -56,6 +56,7 @@ const CHECKOUT_TAGS = [
   { name: 'recusado', color: '#ef4444' },
   { name: 'reembolso', color: '#f59e0b' },
   { name: 'chargeback', color: '#7c3aed' },
+  { name: 'carrinho abandonado', color: '#94a3b8' },
   { name: 'perdido', color: '#94a3b8' },
   { name: 'anuncio', color: '#0ea5e9' }
 ];

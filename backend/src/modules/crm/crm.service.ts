@@ -38,6 +38,7 @@ const CHECKOUT_TAG_NAMES = [
   'recusado',
   'reembolso',
   'chargeback',
+  'carrinho abandonado',
   'anuncio'
 ] as const;
 
@@ -1282,6 +1283,9 @@ export class CrmService {
         break;
       case OrderStatus.CHARGEBACK:
         desiredTagNames.add('chargeback');
+        break;
+      case OrderStatus.ABANDONED:
+        desiredTagNames.add('carrinho abandonado');
         break;
       default:
         break;
