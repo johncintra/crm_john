@@ -53,6 +53,7 @@ enum OrderStatus {
   DECLINED
   REFUNDED
   CHARGEBACK
+  OVERDUE
 }
 
 enum CheckoutProvider {

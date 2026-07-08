@@ -39,6 +39,7 @@ const CHECKOUT_TAG_NAMES = [
   'reembolso',
   'chargeback',
   'abandono',
+  'assinatura atrasada',
   'anuncio'
 ] as const;
 
@@ -1287,6 +1288,9 @@ export class CrmService {
       case OrderStatus.ABANDONED:
         desiredTagNames.add('abandono');
         break;
+      case OrderStatus.OVERDUE:
+        desiredTagNames.add('assinatura atrasada');
+        break;
       default:
         break;
     }
@@ -1441,6 +1445,10 @@ export class CrmService {
       return OrderStatus.DECLINED;
     }
 
+    if (['overdue', 'subscription_overdue', 'delayed', 'past_due'].includes(normalized)) {
+      return OrderStatus.OVERDUE;
+    }
+
     if (['abandoned', 'canceled', 'cancelled', 'expired'].includes(normalized)) {
       return OrderStatus.ABANDONED;
     }
@@ -1466,6 +1474,7 @@ export class CrmService {
       PENDING: isBoleto ? 'boleto gerado' : 'pix gerado',
       OPEN: isBoleto ? 'boleto gerado' : isPix ? 'pix gerado' : 'carrinho abandonado',
       ABANDONED: 'carrinho abandonado',
+      OVERDUE: 'carrinho abandonado',
       REFUNDED: 'reembolso',
       CHARGEBACK: 'chargeback'
     }[status];
@@ -1490,6 +1499,8 @@ export class CrmService {
         return 'Compra recusada';
       case OrderStatus.ABANDONED:
         return 'Carrinho abandonado';
+      case OrderStatus.OVERDUE:
+        return 'Assinatura atrasada';
       case OrderStatus.REFUNDED:
         return 'Reembolso registrado';
       case OrderStatus.CHARGEBACK:
@@ -1506,6 +1517,7 @@ export class CrmService {
       case OrderStatus.PENDING:
       case OrderStatus.OPEN:
       case OrderStatus.ABANDONED:
+      case OrderStatus.OVERDUE:
         return LeadTemperature.WARM;
       default:
         return LeadTemperature.COLD;

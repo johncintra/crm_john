@@ -57,6 +57,7 @@ const CHECKOUT_TAGS = [
   { name: 'reembolso', color: '#f59e0b' },
   { name: 'chargeback', color: '#7c3aed' },
   { name: 'abandono', color: '#94a3b8' },
+  { name: 'assinatura atrasada', color: '#f59e0b' },
   { name: 'perdido', color: '#94a3b8' },
   { name: 'anuncio', color: '#0ea5e9' }
 ];
