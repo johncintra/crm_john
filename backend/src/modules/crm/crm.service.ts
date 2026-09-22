@@ -620,6 +620,10 @@ export class CrmService {
     if (!normalizedPhone) {
       throw new BadRequestException('A valid phone number is required.');
     }
+    // See brazilianPhoneVariants — the checkout source and a WhatsApp/manual
+    // lead can disagree on whether the mobile 9th digit is present, which
+    // otherwise silently defeats every phone match below.
+    const phoneVariants = this.brazilianPhoneVariants(normalizedPhone);
 
     const targetStage =
       provider === CheckoutProvider.ACTIVECAMPAIGN
@@ -634,7 +638,7 @@ export class CrmService {
       // something.
       const existingLead =
         (await tx.lead.findFirst({
-          where: { workspaceId: workspace.id, pipelineId: checkoutPipeline.id, normalizedPhone }
+          where: { workspaceId: workspace.id, pipelineId: checkoutPipeline.id, normalizedPhone: { in: phoneVariants } }
         })) ??
         (normalizedEmail
           ? await tx.lead.findFirst({
@@ -747,7 +751,7 @@ export class CrmService {
         tx,
         workspace.id,
         checkoutPipeline.id,
-        normalizedPhone,
+        phoneVariants,
         normalizedEmail,
         tagRegistry,
         provider,
@@ -1442,7 +1446,7 @@ export class CrmService {
     tx: Prisma.TransactionClient,
     workspaceId: string,
     checkoutPipelineId: string,
-    normalizedPhone: string,
+    phoneVariants: string[],
     normalizedEmail: string | null,
     tagRegistry: Map<string, LeadTag>,
     provider: CheckoutProvider,
@@ -1456,7 +1460,10 @@ export class CrmService {
       where: {
         workspaceId,
         pipelineId: { not: checkoutPipelineId },
-        OR: [{ normalizedPhone }, ...(normalizedEmail ? [{ email: normalizedEmail }] : [])]
+        OR: [
+          phoneVariants.length ? { normalizedPhone: { in: phoneVariants } } : undefined,
+          normalizedEmail ? { email: normalizedEmail } : undefined
+        ].filter(Boolean) as Prisma.LeadWhereInput[]
       }
     });
 
