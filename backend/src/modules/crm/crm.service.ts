@@ -20,6 +20,7 @@ import { CreateNoteDto } from './dto/create-note.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { SyncMessageItemDto } from './dto/sync-messages.dto';
+import { ZapSignSignerDto } from './dto/zapsign-webhook.dto';
 
 const EVENT_TYPE_MAP: Record<LeadEventType, string> = {
   CHECKOUT_EVENT: 'checkout_event',
@@ -45,6 +46,14 @@ const CHECKOUT_TAG_NAMES = [
 
 const AD_LEAD_STAGE_NAME = 'lead de anúncio';
 const AD_LEAD_AMOUNT_CENTS = 79600;
+
+// Contract-signature webhooks (ZapSign) aren't a checkout/order event — no
+// product, no amount, no OrderStatus/CheckoutProvider — just a tag applied
+// to whichever existing lead (found by phone/email/cpf) matches the
+// signer, exactly like a vendor manually tagging a card "aprovado" already
+// pins it into the "Compra Aprovada" column (see COMPRA_APROVADA_TAG_NAMES
+// in SidebarApp.tsx, which this tag name is mirrored into).
+const CONTRACT_SIGNED_TAG_NAME = 'contrato assinado';
 
 @Injectable()
 export class CrmService {
@@ -863,6 +872,99 @@ export class CrmService {
       externalId: this.extractString(payload, ['contact_id', 'contact.id', 'id']) ?? undefined,
       metadata: payload
     };
+  }
+
+  // Only "the document is fully signed" matters here — a multi-signer
+  // contract fires doc_signed once per signer, with the document-level
+  // status staying "pending" until the last one signs, so filtering on
+  // that top-level status (not just the event name) avoids moving a lead
+  // over a partial signature.
+  mapZapSignWebhookPayload(payload: Record<string, unknown>): ZapSignSignerDto | null {
+    const eventType = this.extractString(payload, ['event_type']);
+    const docStatus = this.extractString(payload, ['status']);
+    if (eventType !== 'doc_signed' || docStatus !== 'signed') {
+      return null;
+    }
+
+    const signers = Array.isArray(payload.signers) ? (payload.signers as Record<string, unknown>[]) : [];
+    const signer = signers[0] ?? {};
+
+    const phoneCountry = this.extractString(signer, ['phone_country']) ?? '55';
+    const phoneNumber = this.extractString(signer, ['phone_number']);
+
+    return {
+      phone: phoneNumber ? `${phoneCountry}${phoneNumber}` : '',
+      email: this.extractString(signer, ['email']) ?? undefined,
+      cpf: this.extractString(signer, ['cpf']) ?? undefined,
+      documentName: this.extractString(payload, ['name']) ?? undefined,
+      documentToken: this.extractString(payload, ['token']) ?? undefined
+    };
+  }
+
+  async ingestContractSignedEvent(token: string, dto: ZapSignSignerDto) {
+    const workspace = await this.prisma.workspace.findUnique({ where: { checkoutToken: token } });
+    if (!workspace) {
+      throw new ForbiddenException('Invalid checkout token.');
+    }
+
+    const normalizedPhone = this.normalizePhone(dto.phone);
+    const normalizedEmail = dto.email?.trim().toLowerCase() || null;
+    const trimmedCpf = dto.cpf?.trim() || null;
+
+    if (!normalizedPhone && !normalizedEmail && !trimmedCpf) {
+      throw new BadRequestException('At least a phone, email or CPF is required to match the signer to a lead.');
+    }
+
+    // Workspace-wide, not scoped to the checkout pipeline — for this flow
+    // the lead already exists as a regular CRM card (from a WhatsApp
+    // conversation or an ad-lead import), not from a checkout webhook.
+    const lead = await this.prisma.lead.findFirst({
+      where: {
+        workspaceId: workspace.id,
+        OR: [
+          normalizedPhone ? { normalizedPhone } : undefined,
+          normalizedEmail ? { email: normalizedEmail } : undefined,
+          trimmedCpf ? { cpf: trimmedCpf } : undefined
+        ].filter(Boolean) as Prisma.LeadWhereInput[]
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    if (!lead) {
+      return { ok: true, matched: false };
+    }
+
+    let tag = await this.prisma.leadTag.findFirst({
+      where: { workspaceId: workspace.id, name: { equals: CONTRACT_SIGNED_TAG_NAME, mode: 'insensitive' } }
+    });
+    if (!tag) {
+      tag = await this.prisma.leadTag.create({
+        data: { workspaceId: workspace.id, name: CONTRACT_SIGNED_TAG_NAME, color: '#22c55e' }
+      });
+    }
+
+    await this.prisma.leadTagOnLead.upsert({
+      where: { leadId_tagId: { leadId: lead.id, tagId: tag.id } },
+      create: { leadId: lead.id, tagId: tag.id },
+      update: {}
+    });
+
+    await this.prisma.leadTimelineEvent.create({
+      data: {
+        leadId: lead.id,
+        type: LeadEventType.SYSTEM,
+        title: 'Contrato assinado',
+        description: dto.documentName
+          ? `Documento "${dto.documentName}" assinado via ZapSign.`
+          : 'Contrato assinado via ZapSign.',
+        metadata: {
+          provider: 'zapsign',
+          documentToken: dto.documentToken ?? null
+        }
+      }
+    });
+
+    return { ok: true, matched: true, leadId: lead.id };
   }
 
   async listPipelines(userId: string) {

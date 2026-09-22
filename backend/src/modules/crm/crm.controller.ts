@@ -357,4 +357,16 @@ export class CrmController {
 
     return this.crmService.ingestCheckoutEvent(CheckoutProvider.ACTIVECAMPAIGN, token, dto);
   }
+
+  @Post('webhooks/zapsign/:token')
+  ingestZapSignEvent(@Param('token') token: string, @Body() payload: Record<string, unknown>) {
+    const dto = this.crmService.mapZapSignWebhookPayload(payload);
+    if (!dto) {
+      // Not a full "document signed" event (e.g. only one of several
+      // signers, or a different event type) — nothing to do.
+      return { ok: true, ignored: true };
+    }
+
+    return this.crmService.ingestContractSignedEvent(token, dto);
+  }
 }

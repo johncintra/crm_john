@@ -37,9 +37,21 @@ type RailPanel = 'account' | 'lead' | 'templates' | 'lists' | 'calendar';
 // default there (see HIDDEN_BY_DEFAULT_TAG_NAMES in FunnelBoard.tsx),
 // revealed again only by filtering for that exact tag. Same pin
 // mechanic as "aprovado" alone, just a wider set of tags that trigger it.
-const COMPRA_APROVADA_TAG_NAMES = ['aprovado', 'reembolso', 'chargeback'];
+// "contrato assinado" is the ZapSign equivalent for workspaces that close
+// deals via signed contract instead of a checkout payment (see
+// COMPRA_APROVADA_LABEL_OVERRIDES below — those same workspaces show this
+// pinned column as "Contrato Assinado").
+const COMPRA_APROVADA_TAG_NAMES = ['aprovado', 'reembolso', 'chargeback', 'contrato assinado'];
 const hasCompraAprovadaTag = (card: FunnelCard) =>
   (card.tags ?? []).some((tag) => COMPRA_APROVADA_TAG_NAMES.includes(tag.name.trim().toLowerCase()));
+
+// Per-workspace label override for the pinned "Compra Aprovada" column —
+// keyed by login email since that's the only workspace-identifying info
+// available client-side. Scoped narrowly on purpose: every other
+// workspace keeps seeing "Compra Aprovada" unchanged.
+const COMPRA_APROVADA_LABEL_OVERRIDES: Record<string, string> = {
+  'psico@xceducacao.com.br': 'Contrato Assinado'
+};
 
 interface SavedFunnel {
   id: string;
@@ -189,12 +201,12 @@ export function SidebarApp() {
     return [
       {
         id: 'pinned-compra-aprovada',
-        title: 'Compra Aprovada',
+        title: COMPRA_APROVADA_LABEL_OVERRIDES[session?.user?.email ?? ''] ?? 'Compra Aprovada',
         color: '#22c55e',
         cards: [...approvedFromCheckout, ...approvedFromLocalFunnel]
       }
     ];
-  }, [checkoutCards, dedupeAgainstLocalFunnel, isCheckoutFunnelSelected, selectedLocalFunnel]);
+  }, [checkoutCards, dedupeAgainstLocalFunnel, isCheckoutFunnelSelected, selectedLocalFunnel, session?.user?.email]);
 
   // The standalone Checkout funnel is hidden from the switcher — every
   // regular funnel already surfaces its leads via the pinned
