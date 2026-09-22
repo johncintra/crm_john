@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException
 } from '@nestjs/common';
 import {
@@ -57,6 +58,8 @@ const CONTRACT_SIGNED_TAG_NAME = 'contrato assinado';
 
 @Injectable()
 export class CrmService {
+  private readonly logger = new Logger(CrmService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async findLeadByPhone(userId: string, phone: string) {
@@ -904,10 +907,12 @@ export class CrmService {
   async ingestContractSignedEvent(token: string, dto: ZapSignSignerDto) {
     const workspace = await this.prisma.workspace.findUnique({ where: { checkoutToken: token } });
     if (!workspace) {
+      this.logger.warn(`ZapSign webhook received with an unknown token: ${token}`);
       throw new ForbiddenException('Invalid checkout token.');
     }
 
     const normalizedPhone = this.normalizePhone(dto.phone);
+    const phoneVariants = normalizedPhone ? this.brazilianPhoneVariants(normalizedPhone) : [];
     const normalizedEmail = dto.email?.trim().toLowerCase() || null;
     const trimmedCpf = dto.cpf?.trim() || null;
 
@@ -918,11 +923,14 @@ export class CrmService {
     // Workspace-wide, not scoped to the checkout pipeline — for this flow
     // the lead already exists as a regular CRM card (from a WhatsApp
     // conversation or an ad-lead import), not from a checkout webhook.
+    // Phone matches against every mobile-9th-digit variant (see
+    // brazilianPhoneVariants) since a WhatsApp-sourced lead and a
+    // ZapSign-sourced signer can disagree on whether that digit is there.
     const lead = await this.prisma.lead.findFirst({
       where: {
         workspaceId: workspace.id,
         OR: [
-          normalizedPhone ? { normalizedPhone } : undefined,
+          phoneVariants.length ? { normalizedPhone: { in: phoneVariants } } : undefined,
           normalizedEmail ? { email: normalizedEmail } : undefined,
           trimmedCpf ? { cpf: trimmedCpf } : undefined
         ].filter(Boolean) as Prisma.LeadWhereInput[]
@@ -931,8 +939,14 @@ export class CrmService {
     });
 
     if (!lead) {
+      this.logger.warn(
+        `ZapSign doc_signed for workspace ${workspace.id} matched no lead ` +
+          `(phone variants tried: ${phoneVariants.join(', ') || 'none'}, email: ${normalizedEmail ?? 'none'}, cpf: ${trimmedCpf ?? 'none'}, doc: ${dto.documentName ?? 'unknown'})`
+      );
       return { ok: true, matched: false };
     }
+
+    this.logger.log(`ZapSign doc_signed matched lead ${lead.id} in workspace ${workspace.id} (doc: ${dto.documentName ?? 'unknown'})`);
 
     let tag = await this.prisma.leadTag.findFirst({
       where: { workspaceId: workspace.id, name: { equals: CONTRACT_SIGNED_TAG_NAME, mode: 'insensitive' } }
@@ -1331,6 +1345,30 @@ export class CrmService {
     }
 
     return digits;
+  }
+
+  // Brazilian mobile numbers gained a mandatory leading "9" on the local
+  // part years ago, but plenty of sources (WhatsApp's own contact data
+  // among them) still disagree about whether it's there — the same real
+  // person can end up stored as ...81916866988 in one place and
+  // ...819916866988 in another. Returns every 55+DDD+local variant worth
+  // trying, so a phone-based lookup isn't defeated by that one digit.
+  private brazilianPhoneVariants(digits: string): string[] {
+    if (!digits.startsWith('55') || digits.length < 12) {
+      return [digits];
+    }
+
+    const ddd = digits.slice(2, 4);
+    const local = digits.slice(4);
+
+    if (local.length === 9 && local.startsWith('9')) {
+      return [digits, `55${ddd}${local.slice(1)}`];
+    }
+    if (local.length === 8) {
+      return [digits, `55${ddd}9${local}`];
+    }
+
+    return [digits];
   }
 
   private async loadCheckoutTags(tx: Prisma.TransactionClient, workspaceId: string) {
