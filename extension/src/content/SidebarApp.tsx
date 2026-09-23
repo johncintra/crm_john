@@ -747,15 +747,6 @@ export function SidebarApp() {
       .catch(() => setToast('Erro ao salvar email no servidor.'));
   };
 
-  const handleCopyReferredBy = async (email: string) => {
-    try {
-      await copyToClipboard(email);
-      setToast('Email de indicação copiado.');
-    } catch {
-      setToast('Nao consegui copiar o email.');
-    }
-  };
-
   const handleUpdateCardReferredBy = (leadId: string, email: string) => {
     const referredByEmail = email || null;
     setFunnels((prev) => prev.map((f) => ({
@@ -1191,7 +1182,6 @@ export function SidebarApp() {
           onAssignConversation={handleAssignConversation}
           onAssignPinnedCard={handleAssignPinnedCard}
           onUpdateCardEmail={handleUpdateCardEmail}
-          onCopyReferredBy={handleCopyReferredBy}
           onUpdateCardReferredBy={handleUpdateCardReferredBy}
           showReferralField={REFERRAL_FIELD_EMAILS.has(session?.user?.email ?? '')}
           onAddCardTag={handleAddCardTag}
