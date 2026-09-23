@@ -43,6 +43,7 @@ export interface LeadSummary {
   source?: string | null;
   temperature?: string | null;
   cpf?: string | null;
+  referredByEmail?: string | null;
   currentStage?: {
     id: string;
     name: string;
@@ -75,6 +76,7 @@ export interface CheckoutBoardCard {
   source?: string | null;
   temperature?: string | null;
   wasCheckoutOpportunity?: boolean;
+  referredByEmail?: string | null;
   tags: LeadTag[];
   latestOrder?: {
     id: string;
@@ -173,6 +175,7 @@ export interface RemotePipelineBoard {
     columnId: string | null;
     source?: string | null;
     temperature?: string | null;
+    referredByEmail?: string | null;
     tags: Array<{ id: string; name: string; color?: string | null }>;
     latestOrder: {
       id: string;
@@ -270,6 +273,7 @@ export type BackgroundRequest =
       };
     }
   | { type: 'lead:update-email'; payload: { leadId: string; email: string } }
+  | { type: 'lead:update-referred-by'; payload: { leadId: string; email: string } }
   | { type: 'lead:add-tag'; payload: { leadId: string; name: string; color?: string } }
   | { type: 'lead:remove-tag'; payload: { leadId: string; tagId: string } }
   | { type: 'pipeline:move-card'; payload: { pipelineId: string; leadId: string; stageId: string } }

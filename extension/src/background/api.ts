@@ -328,6 +328,12 @@ export async function updateLeadEmail(leadId: string, email: string): Promise<vo
   await request(`/leads/${leadId}/email`, { method: 'PATCH', body: { email } });
 }
 
+export async function updateLeadReferredBy(leadId: string, email: string): Promise<void> {
+  const session = await getStoredSession();
+  if (isPreviewSession(session)) return;
+  await request(`/leads/${leadId}/referred-by`, { method: 'PATCH', body: { email } });
+}
+
 export async function addLeadTag(leadId: string, name: string, color?: string): Promise<{ id: string; name: string; color: string | null }> {
   const session = await getStoredSession();
   if (isPreviewSession(session)) return { id: `pv-tag-${Date.now()}`, name, color: color ?? null };

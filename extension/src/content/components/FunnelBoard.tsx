@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Copy, MessageCircle, Plus, Settings, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Copy, MessageCircle, Pencil, Plus, Settings, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatCurrency } from '../../shared/utils';
 import type { WorkspaceTag } from '../../shared/types';
@@ -30,6 +30,7 @@ export interface FunnelCard {
   source?: string | null;
   temperature?: string | null;
   wasCheckoutOpportunity?: boolean;
+  referredByEmail?: string | null;
   // True for regular CRM cards pinned into Compra Aprovada via the
   // "aprovado" tag rather than via checkout data — not draggable out of
   // the pinned column, since removing/swapping the tag is the correction.
@@ -70,6 +71,12 @@ interface FunnelBoardProps {
   onAssignConversation: (conversation: WhatsAppConversationItem, columnId: string) => void | Promise<void>;
   onAssignPinnedCard?: (card: FunnelCard, columnId: string) => void | Promise<void>;
   onUpdateCardEmail?: (leadId: string, email: string) => void;
+  onCopyReferredBy?: (email: string) => void;
+  onUpdateCardReferredBy?: (leadId: string, email: string) => void;
+  // Gates the "Indicação" (referred-by) row — off by default so every
+  // other workspace's cards render exactly as before; only the workspaces
+  // that actually track referrals turn it on.
+  showReferralField?: boolean;
   onAddCardTag?: (leadId: string, name: string) => void;
   onRemoveCardTag?: (leadId: string, tagId: string) => void;
   availableTags?: WorkspaceTag[];
@@ -136,6 +143,9 @@ interface FunnelCardItemProps {
   onCardDragEnd: () => void;
   onCopyEmail?: (email: string) => void;
   onUpdateCardEmail?: (leadId: string, email: string) => void;
+  onCopyReferredBy?: (email: string) => void;
+  onUpdateCardReferredBy?: (leadId: string, email: string) => void;
+  showReferralField?: boolean;
   onAddCardTag?: (leadId: string, name: string) => void;
   onRemoveCardTag?: (leadId: string, tagId: string) => void;
   availableTags: WorkspaceTag[];
@@ -160,6 +170,9 @@ const FunnelCardItem = memo(function FunnelCardItem({
   onCardDragEnd,
   onCopyEmail,
   onUpdateCardEmail,
+  onCopyReferredBy,
+  onUpdateCardReferredBy,
+  showReferralField,
   onAddCardTag,
   onRemoveCardTag,
   availableTags,
@@ -246,6 +259,76 @@ const FunnelCardItem = memo(function FunnelCardItem({
 
           {!card.latestOrder && card.source ? (
             <p className="crm-funnel-card-meta">{card.source}</p>
+          ) : null}
+
+          {showReferralField ? (
+            <div className="crm-funnel-card-email-row">
+              <p className={card.referredByEmail ? 'crm-funnel-card-email' : 'crm-funnel-card-email crm-funnel-card-email-empty'}>
+                {card.referredByEmail ? `Indicação: ${card.referredByEmail}` : 'Indicação: N/D'}
+              </p>
+              {card.referredByEmail && onCopyReferredBy ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Copiar email de indicação"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onCopyReferredBy(card.referredByEmail!);
+                  }}
+                >
+                  <Copy className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+              {card.referredByEmail && card.leadId && onUpdateCardReferredBy ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Editar indicação"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const value = window.prompt(`Email de quem indicou ${card.name}:`, card.referredByEmail ?? '')?.trim();
+                    if (value) onUpdateCardReferredBy(card.leadId!, value);
+                  }}
+                >
+                  <Pencil className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+              {card.referredByEmail && card.leadId && onUpdateCardReferredBy ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Remover indicação"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onUpdateCardReferredBy(card.leadId!, '');
+                  }}
+                >
+                  <X className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+              {!card.referredByEmail && card.leadId && onUpdateCardReferredBy ? (
+                <button
+                  type="button"
+                  className="crm-funnel-card-email-copy"
+                  title="Adicionar indicação"
+                  onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const value = window.prompt(`Email de quem indicou ${card.name}:`)?.trim();
+                    if (value) onUpdateCardReferredBy(card.leadId!, value);
+                  }}
+                >
+                  <Plus className="crm-h-3 crm-w-3" />
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="crm-funnel-card-tags">
@@ -340,6 +423,9 @@ export function FunnelBoard({
   onAssignConversation,
   onAssignPinnedCard,
   onUpdateCardEmail,
+  onCopyReferredBy,
+  onUpdateCardReferredBy,
+  showReferralField,
   onAddCardTag,
   onRemoveCardTag,
   availableTags = [],
@@ -477,6 +563,9 @@ export function FunnelBoard({
                 onCardDragEnd={handleCardDragEnd}
                 onCopyEmail={onCopyEmail}
                 onUpdateCardEmail={onUpdateCardEmail}
+                onCopyReferredBy={onCopyReferredBy}
+                onUpdateCardReferredBy={onUpdateCardReferredBy}
+                showReferralField={showReferralField}
                 onAddCardTag={onAddCardTag}
                 onRemoveCardTag={onRemoveCardTag}
                 availableTags={availableTags}
@@ -796,6 +885,9 @@ export function FunnelBoard({
                           onCardDragEnd={handleCardDragEnd}
                           onCopyEmail={onCopyEmail}
                           onUpdateCardEmail={onUpdateCardEmail}
+                          onCopyReferredBy={onCopyReferredBy}
+                          onUpdateCardReferredBy={onUpdateCardReferredBy}
+                          showReferralField={showReferralField}
                           onAddCardTag={onAddCardTag}
                           onRemoveCardTag={onRemoveCardTag}
                           availableTags={availableTags}

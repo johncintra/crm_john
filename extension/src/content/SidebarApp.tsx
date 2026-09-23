@@ -53,6 +53,11 @@ const COMPRA_APROVADA_LABEL_OVERRIDES: Record<string, string> = {
   'psico@xceducacao.com.br': 'Contrato Assinado'
 };
 
+// Workspaces that track "who referred this lead" (email as the referrer's
+// id) on the card — same narrow per-login-email scoping as the label
+// override above.
+const REFERRAL_FIELD_EMAILS = new Set(['psico@xceducacao.com.br']);
+
 interface SavedFunnel {
   id: string;
   name: string;
@@ -126,6 +131,7 @@ export function SidebarApp() {
       source: card.source,
       temperature: card.temperature ?? null,
       wasCheckoutOpportunity: card.wasCheckoutOpportunity ?? false,
+      referredByEmail: card.referredByEmail ?? null,
       tags: (card.tags ?? []).filter((tag) => {
         const normalizedName = tag.name.trim().toLowerCase();
         return normalizedName !== 'kiwify' && normalizedName !== 'hotmart';
@@ -509,12 +515,12 @@ export function SidebarApp() {
 
   const loadFunnelBoard = useCallback(async (pipelineId: string) => {
     try {
-      const board = await sendMessage<{ funnel: { id: string; name: string }; columns: Array<{ id: string; name: string; color: string }>; cards: Array<{ id: string; leadId: string; name: string; email?: string | null; phone?: string | null; normalizedPhone?: string | null; avatarUrl: null; columnId: string | null; source?: string | null; temperature?: string | null; tags: Array<{ id: string; name: string; color?: string | null }>; latestOrder: unknown }> }>({ type: 'pipeline:fetch-board', payload: { id: pipelineId } });
+      const board = await sendMessage<{ funnel: { id: string; name: string }; columns: Array<{ id: string; name: string; color: string }>; cards: Array<{ id: string; leadId: string; name: string; email?: string | null; phone?: string | null; normalizedPhone?: string | null; avatarUrl: null; columnId: string | null; source?: string | null; temperature?: string | null; referredByEmail?: string | null; tags: Array<{ id: string; name: string; color?: string | null }>; latestOrder: unknown }> }>({ type: 'pipeline:fetch-board', payload: { id: pipelineId } });
       setFunnels((prev) => prev.map((f) => f.id !== pipelineId ? f : {
         ...f,
         name: board.funnel.name,
         columns: board.columns.map((c) => ({ id: c.id, name: c.name, color: c.color })),
-        cards: board.cards.map((c) => ({ id: c.id, leadId: c.leadId, name: c.name, email: c.email ?? null, phone: c.phone ?? c.normalizedPhone ?? null, normalizedPhone: c.normalizedPhone ?? null, avatarUrl: null, columnId: c.columnId ?? f.columns[0]?.id ?? '', source: c.source ?? null, temperature: c.temperature ?? null, tags: c.tags, latestOrder: c.latestOrder as FunnelCard['latestOrder'] }))
+        cards: board.cards.map((c) => ({ id: c.id, leadId: c.leadId, name: c.name, email: c.email ?? null, phone: c.phone ?? c.normalizedPhone ?? null, normalizedPhone: c.normalizedPhone ?? null, avatarUrl: null, columnId: c.columnId ?? f.columns[0]?.id ?? '', source: c.source ?? null, temperature: c.temperature ?? null, referredByEmail: c.referredByEmail ?? null, tags: c.tags, latestOrder: c.latestOrder as FunnelCard['latestOrder'] }))
       }));
     } catch { /* keep existing state on error */ }
   }, [sendMessage]);
@@ -739,6 +745,27 @@ export function SidebarApp() {
     void sendMessage({ type: 'lead:update-email', payload: { leadId, email } })
       .then(() => setToast('Email atualizado.'))
       .catch(() => setToast('Erro ao salvar email no servidor.'));
+  };
+
+  const handleCopyReferredBy = async (email: string) => {
+    try {
+      await copyToClipboard(email);
+      setToast('Email de indicação copiado.');
+    } catch {
+      setToast('Nao consegui copiar o email.');
+    }
+  };
+
+  const handleUpdateCardReferredBy = (leadId: string, email: string) => {
+    const referredByEmail = email || null;
+    setFunnels((prev) => prev.map((f) => ({
+      ...f,
+      cards: f.cards.map((c) => (c.leadId === leadId ? { ...c, referredByEmail } : c))
+    })));
+    setContext((prev) => (prev && prev.lead.id === leadId ? { ...prev, lead: { ...prev.lead, referredByEmail } } : prev));
+    void sendMessage({ type: 'lead:update-referred-by', payload: { leadId, email } })
+      .then(() => setToast(email ? 'Indicação salva.' : 'Indicação removida.'))
+      .catch(() => setToast('Erro ao salvar indicação no servidor.'));
   };
 
   const handleAddCardTag = (leadId: string, name: string) => {
@@ -1164,6 +1191,9 @@ export function SidebarApp() {
           onAssignConversation={handleAssignConversation}
           onAssignPinnedCard={handleAssignPinnedCard}
           onUpdateCardEmail={handleUpdateCardEmail}
+          onCopyReferredBy={handleCopyReferredBy}
+          onUpdateCardReferredBy={handleUpdateCardReferredBy}
+          showReferralField={REFERRAL_FIELD_EMAILS.has(session?.user?.email ?? '')}
           onAddCardTag={handleAddCardTag}
           onRemoveCardTag={handleRemoveCardTag}
           availableTags={workspaceTags}

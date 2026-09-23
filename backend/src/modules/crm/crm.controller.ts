@@ -23,6 +23,7 @@ import { IngestCheckoutEventDto } from './dto/ingest-checkout-event.dto';
 import { UpdateLeadStageDto } from './dto/update-lead-stage.dto';
 import { UpdateLeadPhoneDto } from './dto/update-lead-phone.dto';
 import { UpdateLeadEmailDto } from './dto/update-lead-email.dto';
+import { UpdateLeadReferredByDto } from './dto/update-lead-referred-by.dto';
 import { UpdateLeadValueDto } from './dto/update-lead-value.dto';
 import { AddLeadTagDto } from './dto/add-lead-tag.dto';
 import { MacroUpsertDto } from './dto/macro-upsert.dto';
@@ -129,6 +130,16 @@ export class CrmController {
     @Body() dto: UpdateLeadEmailDto
   ) {
     return this.crmService.updateLeadEmail(user.sub, leadId, dto.email);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('leads/:leadId/referred-by')
+  updateLeadReferredBy(
+    @CurrentUser() user: AuthUser,
+    @Param('leadId') leadId: string,
+    @Body() dto: UpdateLeadReferredByDto
+  ) {
+    return this.crmService.updateLeadReferredBy(user.sub, leadId, dto.email);
   }
 
   @UseGuards(JwtAuthGuard)

@@ -27,6 +27,7 @@ import {
   syncLeadMessages,
   updateApiBaseUrl,
   updateLeadEmail,
+  updateLeadReferredBy,
   updateLeadPhone,
   updateLeadStage,
   updateLeadValue,
@@ -199,6 +200,11 @@ chrome.runtime.onMessage.addListener((message: BackgroundRequest, _sender, sendR
         }
         case 'lead:update-email': {
           await updateLeadEmail(message.payload.leadId, message.payload.email);
+          sendResponse({ ok: true } satisfies BackgroundResponse);
+          return;
+        }
+        case 'lead:update-referred-by': {
+          await updateLeadReferredBy(message.payload.leadId, message.payload.email);
           sendResponse({ ok: true } satisfies BackgroundResponse);
           return;
         }

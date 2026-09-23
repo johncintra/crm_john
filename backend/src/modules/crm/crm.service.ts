@@ -235,6 +235,29 @@ export class CrmService {
     return { ok: true };
   }
 
+  async updateLeadReferredBy(userId: string, leadId: string, email?: string) {
+    const workspaceId = await this.getWorkspaceId(userId);
+    await this.requireLead(workspaceId, leadId);
+    const trimmed = email?.trim() ?? '';
+
+    if (!trimmed) {
+      await this.prisma.lead.update({ where: { id: leadId }, data: { referredByEmail: null } });
+      return { ok: true };
+    }
+
+    const normalizedEmail = trimmed.toLowerCase();
+    if (!normalizedEmail.includes('@')) {
+      throw new BadRequestException('Invalid email.');
+    }
+
+    await this.prisma.lead.update({
+      where: { id: leadId },
+      data: { referredByEmail: normalizedEmail }
+    });
+
+    return { ok: true };
+  }
+
   async addLeadTag(userId: string, leadId: string, name: string, color?: string) {
     const workspaceId = await this.getWorkspaceId(userId);
     await this.requireLead(workspaceId, leadId);
@@ -460,6 +483,7 @@ export class CrmService {
           source: lead.source,
           temperature: lead.temperature,
           wasCheckoutOpportunity: lead.wasCheckoutOpportunity,
+          referredByEmail: lead.referredByEmail,
           tags: lead.tags.map((item) => ({
             id: item.tag.id,
             name: item.tag.name,
@@ -1051,6 +1075,7 @@ export class CrmService {
           columnId: lead.currentStageId,
           source: lead.source,
           temperature: lead.temperature,
+          referredByEmail: lead.referredByEmail,
           tags: lead.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
           latestOrder: realOrder
             ? {
@@ -1303,6 +1328,7 @@ export class CrmService {
       source: lead.source,
       temperature: lead.temperature,
       cpf: lead.cpf,
+      referredByEmail: lead.referredByEmail,
       currentStage: lead.currentStage
         ? {
             id: lead.currentStage.id,
