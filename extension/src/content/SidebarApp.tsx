@@ -747,6 +747,15 @@ export function SidebarApp() {
       .catch(() => setToast('Erro ao salvar email no servidor.'));
   };
 
+  const handleCopyReferredBy = async (email: string) => {
+    try {
+      await copyToClipboard(email);
+      setToast('Email de indicação copiado.');
+    } catch {
+      setToast('Nao consegui copiar o email.');
+    }
+  };
+
   const handleUpdateCardReferredBy = (leadId: string, email: string) => {
     const referredByEmail = email || null;
     setFunnels((prev) => prev.map((f) => ({
@@ -1182,6 +1191,7 @@ export function SidebarApp() {
           onAssignConversation={handleAssignConversation}
           onAssignPinnedCard={handleAssignPinnedCard}
           onUpdateCardEmail={handleUpdateCardEmail}
+          onCopyReferredBy={handleCopyReferredBy}
           onUpdateCardReferredBy={handleUpdateCardReferredBy}
           showReferralField={REFERRAL_FIELD_EMAILS.has(session?.user?.email ?? '')}
           onAddCardTag={handleAddCardTag}
@@ -1426,6 +1436,26 @@ export function SidebarApp() {
                       />
                     </div>
                   </div>
+
+                  {REFERRAL_FIELD_EMAILS.has(session?.user?.email ?? '') ? (
+                    <div className="crm-rail-card">
+                      <span className="crm-text-xs crm-font-semibold crm-text-slate-300">Ind:</span>
+                      <p className="crm-mt-1 crm-text-sm crm-text-white">
+                        {context.lead.referredByEmail ?? <span className="crm-text-slate-500 crm-italic">Ind: N/D</span>}
+                      </p>
+                      <button
+                        type="button"
+                        className="crm-mt-2 crm-text-xs crm-font-semibold crm-text-accent-300"
+                        onClick={() => {
+                          const raw = window.prompt(`Email de quem indicou ${context.lead.name}:`, context.lead.referredByEmail ?? '');
+                          if (raw === null) return;
+                          handleUpdateCardReferredBy(context.lead.id, raw.trim());
+                        }}
+                      >
+                        {context.lead.referredByEmail ? 'Editar indicação' : '+ Adicionar indicação'}
+                      </button>
+                    </div>
+                  ) : null}
                 </>
               ) : (
                 <div className="crm-rail-empty">
