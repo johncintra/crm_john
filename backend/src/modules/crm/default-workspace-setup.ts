@@ -170,8 +170,33 @@ async function ensureAdLeadStage(db: DbClient, checkoutPipelineId: string): Prom
   return true;
 }
 
+// Workspaces that don't run real Kiwify/Hotmart checkout events at all
+// (e.g. AprovaPM Psico closes deals via a signed contract, not a
+// card/pix/boleto payment) so these default payment-related tags don't
+// apply there — without this, this function running on every board fetch
+// would silently resurrect a tag the seller deliberately removed.
+const CHECKOUT_TAG_EXCLUSIONS_BY_WORKSPACE: Record<string, string[]> = {
+  cmucqbyuv2nbt11aql49je4to: [
+    'kiwify',
+    'hotmart',
+    'pix',
+    'boleto',
+    'recusado',
+    'reembolso',
+    'chargeback',
+    'abandono',
+    'assinatura atrasada'
+  ]
+};
+
 async function ensureCheckoutTags(db: DbClient, workspaceId: string) {
+  const excludedTagNames = new Set(CHECKOUT_TAG_EXCLUSIONS_BY_WORKSPACE[workspaceId] ?? []);
+
   for (const tag of CHECKOUT_TAGS) {
+    if (excludedTagNames.has(tag.name)) {
+      continue;
+    }
+
     const existingTag = await db.leadTag.findFirst({
       where: {
         workspaceId,
