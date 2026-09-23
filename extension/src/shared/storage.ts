@@ -3,7 +3,27 @@ import type { AuthSession } from './types';
 const STORAGE_KEY = 'crm-john-auth-session';
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000';
 
+// This file is called directly from the content script (not relayed
+// through the background worker), so it's exposed to the one failure mode
+// unique to that context: reloading the extension in chrome://extensions
+// orphans every already-open tab's content script — chrome.runtime.id
+// goes away, and any chrome.storage.* call on the old instance throws
+// "Cannot read properties of undefined (reading 'local')" as an uncaught
+// promise rejection. Only a page refresh fixes it, so there's nothing to
+// retry; these guards just fail quietly instead of crashing.
+function isExtensionContextValid(): boolean {
+  try {
+    return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
 export async function getStoredSession(): Promise<AuthSession> {
+  if (!isExtensionContextValid()) {
+    return { token: null, apiBaseUrl: DEFAULT_API_BASE_URL, user: null };
+  }
+
   const result = await chrome.storage.local.get(STORAGE_KEY);
   const session = result[STORAGE_KEY] as Partial<AuthSession> | undefined;
 
@@ -15,10 +35,12 @@ export async function getStoredSession(): Promise<AuthSession> {
 }
 
 export async function setStoredSession(session: AuthSession): Promise<void> {
+  if (!isExtensionContextValid()) return;
   await chrome.storage.local.set({ [STORAGE_KEY]: session });
 }
 
 export async function clearStoredSession(): Promise<void> {
+  if (!isExtensionContextValid()) return;
   await chrome.storage.local.remove(STORAGE_KEY);
 }
 
@@ -42,11 +64,13 @@ interface StoredPendingMessageHistory extends PendingMessageHistory {
 }
 
 export async function savePendingMessageHistory(value: PendingMessageHistory): Promise<void> {
+  if (!isExtensionContextValid()) return;
   const stored: StoredPendingMessageHistory = { ...value, savedAt: Date.now() };
   await chrome.storage.local.set({ [PENDING_HISTORY_KEY]: stored });
 }
 
 export async function takePendingMessageHistory(): Promise<PendingMessageHistory | null> {
+  if (!isExtensionContextValid()) return null;
   const result = await chrome.storage.local.get(PENDING_HISTORY_KEY);
   const value = (result[PENDING_HISTORY_KEY] as StoredPendingMessageHistory | undefined) ?? null;
   if (value) {
