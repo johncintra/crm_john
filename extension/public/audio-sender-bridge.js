@@ -182,6 +182,10 @@
         const msg = await sendVoiceMedia(event.data.payload.mediaInfo);
         notify('WAS_VOICE_MEDIA_SENT', { messageId: msg?.id?._serialized || null });
       } catch (error) {
+        // [diag] Full error + stack, so the exact broken internal call is
+        // visible in devtools — the toast only ever showed error.message.
+        console.error('[CRM audio][diag] ERRO CAPTURADO em WAS_SEND_VOICE_MEDIA:', error);
+        console.error('[CRM audio][diag] stack:', error && error.stack);
         notify('WAS_VOICE_MEDIA_ERROR', {
           message: error.message || 'Não foi possível enviar o áudio como voz.'
         });
@@ -239,19 +243,30 @@
       throw new Error('Internos do WhatsApp Web ainda não estão disponíveis. Aguarde carregar e tente novamente.');
     }
 
+    console.log('[CRM audio][diag] 1/6 buscando chat ativo...');
     const chat = getActiveChat();
     if (!chat) {
       throw new Error('Abra uma conversa antes de enviar o áudio.');
     }
+    console.log('[CRM audio][diag] 1/6 OK, chat ativo:', chat.id && chat.id._serialized);
 
+    console.log('[CRM audio][diag] 2/6 processando midia (processMediaData)...');
     const mediaOptions = await processMediaData(mediaInfo, { forceVoice: true });
+    console.log('[CRM audio][diag] 2/6 OK, mediaOptions:', mediaOptions);
+
+    console.log('[CRM audio][diag] 3/6 montando mensagem de saida (createOutgoingMessage)...');
     const message = await createOutgoingMessage(chat, mediaOptions);
+    console.log('[CRM audio][diag] 3/6 OK, message:', message);
+
+    console.log('[CRM audio][diag] 4/6 chamando addAndSendMsgToChat...');
     const [msgPromise, sendResultPromise] = window
       .require('WAWebSendMsgChatAction')
       .addAndSendMsgToChat(chat, message);
 
     await msgPromise;
+    console.log('[CRM audio][diag] 5/6 msgPromise resolvida');
     await sendResultPromise;
+    console.log('[CRM audio][diag] 6/6 sendResultPromise resolvida');
 
     return window
       .require('WAWebCollections')
@@ -271,9 +286,13 @@
   }
 
   async function processMediaData(mediaInfo, { forceVoice }) {
+    console.log('[CRM audio][diag] 2a. mediaInfoToFile + OpaqueData.createFromData...');
     const file = mediaInfoToFile(mediaInfo);
     const OpaqueData = window.require('WAWebMediaOpaqueData');
     const opaqueData = await OpaqueData.createFromData(file, mediaInfo.mimetype);
+    console.log('[CRM audio][diag] 2a OK, opaqueData:', opaqueData);
+
+    console.log('[CRM audio][diag] 2b. prepRawMedia...');
     const mediaPrep = window
       .require('WAWebPrepRawMedia')
       .prepRawMedia(opaqueData, {
@@ -284,52 +303,69 @@
       });
 
     const mediaData = await mediaPrep.waitForPrep();
+    console.log('[CRM audio][diag] 2b OK, mediaData:', mediaData, 'filehash:', mediaData && mediaData.filehash);
     if (!mediaData.filehash) {
       throw new Error('Falha ao preparar o áudio: filehash vazio.');
     }
 
+    console.log('[CRM audio][diag] 2c. getOrCreateMediaObject...');
     const mediaObject = window
       .require('WAWebMediaStorage')
       .getOrCreateMediaObject(mediaData.filehash);
+    console.log('[CRM audio][diag] 2c OK, mediaObject:', mediaObject);
+
+    console.log('[CRM audio][diag] 2d. msgToMediaType...');
     const mediaType = window.require('WAWebMmsMediaTypes').msgToMediaType({
       type: mediaData.type,
       isGif: mediaData.isGif,
       isNewsletter: false
     });
+    console.log('[CRM audio][diag] 2d OK, mediaType:', mediaType);
 
     if (forceVoice && mediaData.type === 'ptt') {
+      console.log('[CRM audio][diag] 2e. waveform...');
       mediaData.waveform = mediaObject.contentInfo.waveform || await generateWaveform(file);
+      console.log('[CRM audio][diag] 2e OK');
     }
 
     if (!(mediaData.mediaBlob instanceof OpaqueData)) {
+      console.log('[CRM audio][diag] 2f. mediaBlob nao e OpaqueData, convertendo...');
       mediaData.mediaBlob = await OpaqueData.createFromData(
         mediaData.mediaBlob,
         mediaData.mediaBlob.type
       );
+      console.log('[CRM audio][diag] 2f OK');
     }
 
+    console.log('[CRM audio][diag] 2g. renderableUrl + consolidate...');
     mediaData.renderableUrl = mediaData.mediaBlob.url();
     mediaObject.consolidate(mediaData.toJSON());
     mediaData.mediaBlob.autorelease();
+    console.log('[CRM audio][diag] 2g OK');
 
+    console.log('[CRM audio][diag] 2h. shouldUseMediaCache...');
     const shouldUseMediaCache = window
       .require('WAWebMediaDataUtils')
       .shouldUseMediaCache(
         window.require('WAWebMmsMediaTypes').castToV4(mediaObject.type)
       );
+    console.log('[CRM audio][diag] 2h OK, shouldUseMediaCache:', shouldUseMediaCache);
 
     if (shouldUseMediaCache && mediaData.mediaBlob instanceof OpaqueData) {
       window
         .require('WAWebMediaInMemoryBlobCache')
         .InMemoryMediaBlobCache.put(mediaObject.filehash, mediaData.mediaBlob.formData());
+      console.log('[CRM audio][diag] 2h-cache OK');
     }
 
+    console.log('[CRM audio][diag] 2i. uploadMedia...');
     const { uploadMedia } = window.require('WAWebMediaMmsV4Upload');
     const uploadedMedia = await uploadMedia({
       mimetype: mediaData.mimetype,
       mediaObject,
       mediaType
     });
+    console.log('[CRM audio][diag] 2i OK, uploadedMedia:', uploadedMedia);
 
     const mediaEntry = uploadedMedia.mediaEntry;
     if (!mediaEntry) {
