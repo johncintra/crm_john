@@ -397,7 +397,15 @@
     const { getMaybeMeLidUser, getMaybeMePnUser } = window.require('WAWebUserPrefsMeUser');
     const lidUser = getMaybeMeLidUser();
     const meUser = getMaybeMePnUser();
-    const from = chat.id.isLid() ? lidUser : meUser;
+    const isLidChat = chat.id.isLid();
+    const from = isLidChat ? lidUser : meUser;
+    console.log('[CRM audio][diag] 3a. resolucao de remetente:', {
+      'chat.id': chat.id,
+      'chat.id.isLid()': isLidChat,
+      lidUser,
+      meUser,
+      from
+    });
     const newId = await window.require('WAWebMsgKey').newId();
     let participant;
 
@@ -405,6 +413,7 @@
       participant = window.require('WAWebWidFactory').asUserWidOrThrow(from);
     }
 
+    console.log('[CRM audio][diag] 3b. construindo WAWebMsgKey com:', { from, to: chat.id, id: newId, participant });
     const id = new (window.require('WAWebMsgKey'))({
       from,
       to: chat.id,
@@ -412,6 +421,7 @@
       participant,
       selfDir: 'out'
     });
+    console.log('[CRM audio][diag] 3b OK, id:', id);
 
     const ephemeralFields = window
       .require('WAWebGetEphemeralFieldsMsgActionsUtils')
