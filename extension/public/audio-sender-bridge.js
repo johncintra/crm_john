@@ -407,11 +407,11 @@
       from
     });
     const newId = await window.require('WAWebMsgKey').newId();
-    // [TESTE] Antes só era montado para grupo — a hipótese é que o
-    // WhatsApp agora exige esse identificador do remetente sempre,
-    // mesmo em conversa individual, por causa da migração para LID
-    // (onde um mesmo contato pode ter duas identidades ao mesmo tempo).
-    const participant = window.require('WAWebWidFactory').asUserWidOrThrow(from);
+    let participant;
+
+    if (typeof chat.id?.isGroup === 'function' && chat.id.isGroup()) {
+      participant = window.require('WAWebWidFactory').asUserWidOrThrow(from);
+    }
 
     console.log('[CRM audio][diag] 3b. construindo WAWebMsgKey com:', { from, to: chat.id, id: newId, participant });
     const id = new (window.require('WAWebMsgKey'))({
