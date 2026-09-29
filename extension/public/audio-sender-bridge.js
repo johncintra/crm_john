@@ -427,8 +427,14 @@
       .require('WAWebGetEphemeralFieldsMsgActionsUtils')
       .getEphemeralFields(chat);
 
+    // id must be spread in LAST — mediaOptions (and its toJSON()) carries
+    // the media object's own internal id, and spreading it after ours
+    // silently overwrote the message's real WAWebMsgKey with that one
+    // instead. getValidatedSender() then resolved the sender against that
+    // wrong id and threw "must include an id property (it's how we
+    // memoize) but got undefined". Same root cause reported (and fixed
+    // the same way) in whatsapp-web.js issue #201921/#201922, PR #201923.
     return {
-      id,
       ack: 0,
       body: mediaOptions.preview,
       from,
@@ -440,7 +446,8 @@
       type: 'chat',
       ...ephemeralFields,
       ...mediaOptions,
-      ...(mediaOptions.toJSON ? mediaOptions.toJSON() : {})
+      ...(mediaOptions.toJSON ? mediaOptions.toJSON() : {}),
+      id
     };
   }
 
